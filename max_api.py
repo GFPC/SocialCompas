@@ -12,14 +12,14 @@ class MaxBotAPI:
     """
     Client for interacting with MAX Messenger Bot API (v2 endpoint).
     Base URL: https://platform-api2.max.ru
-    Authorization: Bearer <MAX_BOT_TOKEN>
+    Authorization: <MAX_BOT_TOKEN>
     """
 
     def __init__(self, token: str = config.MAX_BOT_TOKEN, api_url: str = config.MAX_API_URL):
         self.token = token
         self.api_url = api_url.rstrip("/")
         self.headers = {
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": self.token,
             "Content-Type": "application/json",
             "User-Agent": "SocialCompas-MaxBot/1.0",
         }
@@ -46,7 +46,7 @@ class MaxBotAPI:
 
     async def get_me(self) -> Dict[str, Any]:
         """Fetch bot info."""
-        return await self._request("GET", "/getMe")
+        return await self._request("GET", "/me")
 
     async def send_message(
         self,
