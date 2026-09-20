@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "cd miniapp && npm install && npm run build",
+  "outputDirectory": "miniapp/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://socialcompas-api.example.com/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
