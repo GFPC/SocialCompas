@@ -280,7 +280,7 @@ function SurveyView({ onComplete, initialCity, initialCategory }) {
   const [selectedCity, setSelectedCity] = useState(initialCity);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
 
-  const cities = ['Москва', 'Новосибирск'];
+  const cities = ['Москва', 'Новосибирск', 'Санкт-Петербург'];
   const categories = ['Студенты', 'Пенсионеры', 'Участники СВО'];
 
   return (

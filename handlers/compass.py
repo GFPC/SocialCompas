@@ -24,6 +24,7 @@ def get_city_keyboard() -> List[List[Dict[str, str]]]:
     return [
         [{"text": "🏙 Москва", "callback_data": "city_Москва"}],
         [{"text": "🌲 Новосибирск", "callback_data": "city_Новосибирск"}],
+        [{"text": "🏛 Санкт-Петербург", "callback_data": "city_Санкт-Петербург"}],
     ]
 
 
