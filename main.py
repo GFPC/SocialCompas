@@ -3,6 +3,7 @@ import argparse
 import logging
 import sys
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 import config
@@ -10,6 +11,7 @@ from transport import MaxBotTransport
 from storage import init_db, get_db_pool, get_redis
 from fsm import RedisFSMStorage, MySQLFSMStorage, MemoryStorage
 from handlers import Dispatcher
+from api import v1_router
 from simulator import start_web_simulator, run_cli_simulator
 
 logger = logging.getLogger("main")
@@ -18,7 +20,24 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-app = FastAPI(title="MAX Bot Webhook Receiver - SocialCompas Layered Architecture")
+app = FastAPI(
+    title="SocialCompas Unified Backend API & MAX Bot",
+    version="2.0.0",
+    description="Unified backend providing REST API for MiniApp and Webhook/Polling for MAX Messenger Bot."
+)
+
+# Enable CORS for MiniApp frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register MiniApp REST API Routers
+app.include_router(v1_router)
+
 transport = MaxBotTransport()
 
 
@@ -33,7 +52,6 @@ async def setup_fsm_storage():
 
     try:
         await init_db()
-        from storage.db import get_db_pool
         pool = await get_db_pool()
         if pool:
             logger.info("Using MySQLFSMStorage for FSM state management.")
@@ -73,7 +91,7 @@ async def start_long_polling(dp: Dispatcher):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SocialCompas MAX Messenger Bot (Layered Architecture)")
+    parser = argparse.ArgumentParser(description="SocialCompas MAX Messenger Bot & MiniApp Backend")
     parser.add_argument("--sim", action="store_true", help="Запустить локальный веб-симулятор")
     parser.add_argument("--cli", action="store_true", help="Запустить интерактивный консольный симулятор")
     parser.add_argument("--polling", action="store_true", help="Запустить бот в режиме Long-Polling")
@@ -86,26 +104,33 @@ def main():
     elif args.sim:
         start_web_simulator(host=config.HOST, port=config.PORT)
     else:
-        async def run_bot():
+        async def run_bot_and_api():
             storage = await setup_fsm_storage()
             dp = Dispatcher(transport=transport, storage=storage)
 
+            @app.post("/webhook")
+            async def webhook_handler(request: Request):
+                update = await request.json()
+                await dp.feed_update(update)
+                return {"ok": True}
+
             if args.webhook:
-                logger.info(f"Запуск Webhook сервера на {config.HOST}:{config.PORT}")
-
-                @app.post("/webhook")
-                async def webhook_handler(request: Request):
-                    update = await request.json()
-                    await dp.feed_update(update)
-                    return {"ok": True}
-
+                logger.info(f"Запуск Webhook сервера и REST API на http://{config.HOST}:{config.PORT}")
                 config_uvicorn = uvicorn.Config(app, host=config.HOST, port=config.PORT)
                 server = uvicorn.Server(config_uvicorn)
                 await server.serve()
             else:
-                await start_long_polling(dp)
+                # Run FastAPI REST API server alongside background Long-Polling loop
+                logger.info(f"Запуск FastAPI REST API сервер на http://{config.HOST}:{config.PORT}")
+                config_uvicorn = uvicorn.Config(app, host=config.HOST, port=config.PORT)
+                server = uvicorn.Server(config_uvicorn)
 
-        asyncio.run(run_bot())
+                await asyncio.gather(
+                    server.serve(),
+                    start_long_polling(dp)
+                )
+
+        asyncio.run(run_bot_and_api())
 
 
 if __name__ == "__main__":
