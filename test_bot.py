@@ -22,7 +22,8 @@ async def run_tests():
     # Test /compass command
     chat_id, text, kb = await handlers.handle_update({"message": {"text": "/compass", "chat": {"id": "test_1"}}})
     assert "Социальный Компас" in text
-    assert len(kb["inline_keyboard"]) >= 4
+    buttons = kb["attachments"][0]["payload"]["buttons"] if "attachments" in kb else kb["inline_keyboard"]
+    assert len(buttons) >= 4
     print("[OK] /compass command test passed")
 
     # Test inline button callbacks
