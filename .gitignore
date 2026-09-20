@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Node / React
+node_modules/
+dist/
+.vite/
+
 # Environments
 .env
 .venv/
