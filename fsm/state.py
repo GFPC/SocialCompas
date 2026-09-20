@@ -18,3 +18,14 @@ class State:
 class StatesGroup:
     """Group of FSM states."""
     pass
+
+
+class SocialCompasSG(StatesGroup):
+    """FSM States matching Miro Flowchart."""
+    SELECT_CITY = State("SocialCompasSG:SELECT_CITY")
+    SELECT_CATEGORY = State("SocialCompasSG:SELECT_CATEGORY")
+    MAIN_MENU = State("SocialCompasSG:MAIN_MENU")
+    PLACES_LIST = State("SocialCompasSG:PLACES_LIST")
+    PLACE_DETAIL = State("SocialCompasSG:PLACE_DETAIL")
+    FAVORITES = State("SocialCompasSG:FAVORITES")
+    SETTINGS = State("SocialCompasSG:SETTINGS")

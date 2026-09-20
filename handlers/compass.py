@@ -1,138 +1,222 @@
 import logging
 from typing import Any, Dict, List, Optional, Tuple
+
 from transport import BaseEvent, MessageEvent, CallbackEvent, BotStartedEvent
 from fsm import FSMContext
+from fsm.state import SocialCompasSG
+from storage.db import (
+    save_user_profile,
+    get_user_profile,
+    get_places_by_filter,
+    get_place_by_id,
+    add_favorite,
+    remove_favorite,
+    get_user_favorites,
+    is_favorite,
+)
 
 logger = logging.getLogger("handlers.compass")
 
 
+# --- Keyboard Helpers ---
+
+def get_city_keyboard() -> List[List[Dict[str, str]]]:
+    return [
+        [{"text": "🏙 Москва", "callback_data": "city_Москва"}],
+        [{"text": "🌲 Новосибирск", "callback_data": "city_Новосибирск"}],
+        [{"text": "🏛 Санкт-Петербург", "callback_data": "city_Санкт-Петербург"}],
+    ]
+
+
+def get_category_keyboard() -> List[List[Dict[str, str]]]:
+    return [
+        [{"text": "👴 Пенсионер", "callback_data": "cat_Пенсионер"}],
+        [{"text": "🎓 Студент", "callback_data": "cat_Студент"}],
+        [{"text": "🪖 Участник СВО", "callback_data": "cat_Участник СВО"}],
+    ]
+
+
 def get_main_menu_keyboard() -> List[List[Dict[str, str]]]:
     return [
-        [{"text": "🧭 Социальный Компас", "callback_data": "menu_compass"}],
-        [{"text": "ℹ️ О боте MAX", "callback_data": "menu_info"}, {"text": "📋 Помощь", "callback_data": "menu_help"}],
+        [{"text": "📍 Список мест", "callback_data": "view_places"}],
+        [{"text": "⭐ Избранное", "callback_data": "view_favorites"}],
+        [{"text": "📱 Перейти в мини приложение", "url": "https://max.ru"}],
+        [{"text": "⚙️ Настройки", "callback_data": "view_settings"}],
     ]
 
 
-def get_compass_keyboard() -> List[List[Dict[str, str]]]:
+def get_settings_keyboard() -> List[List[Dict[str, str]]]:
     return [
-        [{"text": "💳 Соц. поддержки и льготы", "callback_data": "cat_support"}],
-        [{"text": "📅 Мероприятия и досуг", "callback_data": "cat_events"}],
-        [{"text": "⚖️ Юридическая помощь", "callback_data": "cat_legal"}],
-        [{"text": "🤝 Волонтерство", "callback_data": "cat_volunteer"}],
-        [{"text": "⬅️ Назад в меню", "callback_data": "menu_main"}],
+        [{"text": "✏️ Изменить данные", "callback_data": "edit_profile"}],
+        [{"text": "🏠 В главное меню", "callback_data": "menu_main"}],
     ]
 
 
-def get_back_keyboard() -> List[List[Dict[str, str]]]:
+def get_places_list_keyboard(places: List[Dict[str, Any]]) -> List[List[Dict[str, str]]]:
+    keyboard = []
+    for place in places:
+        keyboard.append([{"text": f"🏛 {place['title']}", "callback_data": f"place_{place['id']}"}])
+    keyboard.append([{"text": "🏠 В главное меню", "callback_data": "menu_main"}])
+    return keyboard
+
+
+def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str) -> List[List[Dict[str, str]]]:
+    fav_btn_text = "❌ Удалить из избранного" if is_fav else "⭐ Добавить в избранное"
+    fav_cb = f"rem_fav_{place_id}" if is_fav else f"add_fav_{place_id}"
+
     return [
-        [{"text": "🧭 К категориям", "callback_data": "menu_compass"}, {"text": "🏠 В главное меню", "callback_data": "menu_main"}]
+        [{"text": fav_btn_text, "callback_data": fav_cb}],
+        [{"text": "🗺 Посмотреть на карте", "url": map_url}],
+        [{"text": "🔙 К списку мест", "callback_data": "view_places"}],
+        [{"text": "🏠 Вернуться на главную", "callback_data": "menu_main"}],
     ]
 
+
+# --- Event Handling ---
 
 async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state: Optional[str]) -> Tuple[str, List[List[Dict[str, str]]]]:
     text = event.text if isinstance(event, MessageEvent) else "/start"
     text = text.strip()
 
-    if text.startswith("/"):
-        cmd = text.split()[0].lower()
-        args = text[len(cmd):].strip()
+    # /start command triggers onboarding survey
+    if text.startswith("/") or not current_state:
+        cmd = text.split()[0].lower() if text.startswith("/") else "/start"
 
         if cmd in ("/start", "/menu"):
+            await ctx.set_state(SocialCompasSG.SELECT_CITY)
             msg = (
-                "👋 Добро пожаловать в Демо-Бот «Социальный Компас» для MAX Мессенджера!\n\n"
-                "Я ваш цифровой помощник по навигации в социальных сервисах, мероприятиях и поддержке.\n\n"
-                "Выберите интересующий вас раздел в меню ниже или введите команду /compass."
+                "👋 Добро пожаловать в чат-бот «Социальный компас».\n\n"
+                "Для того, чтобы я мог помочь вам найти подходящие места, пройдите небольшой опрос.\n\n"
+                "Выберите ваш город:"
             )
-            return msg, get_main_menu_keyboard()
+            return msg, get_city_keyboard()
 
-        elif cmd == "/compass":
-            msg = "🧭 Раздел «Социальный Компас»\n\nВыберите интересующую вас категорию услуг или помощи:"
-            return msg, get_compass_keyboard()
-
-        elif cmd == "/help":
-            msg = (
-                "📋 Справка по командам бота:\n\n"
-                "• /start — Главное меню\n"
-                "• /compass — Категории социального компаса\n"
-                "• /info — Информация о боте и платформе MAX\n"
-                "• /echo <текст> — Эхо-команда для проверки\n"
-                "• /help — Эта справка"
-            )
-            return msg, get_main_menu_keyboard()
-
-        elif cmd == "/info":
-            msg = (
-                "ℹ️ О платформе MAX Messenger & SocialCompas\n\n"
-                "• API: MAX Bot API v2 (platform-api2.max.ru)\n"
-                "• Хранилище: Redis & MySQL (Docker)\n"
-                "• Архитектура: Transport -> FSM -> Dispatcher\n"
-                "• Статус: Готов к интеграции схем Miro"
-            )
-            return msg, get_main_menu_keyboard()
-
-        elif cmd == "/echo":
-            if not args:
-                return "⚠️ Использование: /echo ваш текст", get_main_menu_keyboard()
-            return f"🔊 Эхо: {args}", get_main_menu_keyboard()
-
-    return f"🤖 Вы написали: *{text}*\n\nВоспользуйтесь кнопками ниже для работы с ботом:", get_main_menu_keyboard()
+    # Default fallback
+    data = await ctx.get_data()
+    city = data.get("city", "Москва")
+    category = data.get("category", "Студент")
+    msg = f"🤖 Ваш профиль: {city} ({category}). Воспользуйтесь меню для поиска мест:"
+    return msg, get_main_menu_keyboard()
 
 
 async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_state: Optional[str]) -> Tuple[str, List[List[Dict[str, str]]]]:
     data = event.payload
+    user_id = event.user_id
 
-    if data == "menu_compass":
-        return "🧭 Раздел «Социальный Компас»\n\nВыберите нужную категорию:", get_compass_keyboard()
+    # 1. City selection step
+    if data.startswith("city_"):
+        selected_city = data.replace("city_", "")
+        await ctx.update_data(city=selected_city)
+        await ctx.set_state(SocialCompasSG.SELECT_CATEGORY)
+        msg = f"Вы выбрали: *{selected_city}*\n\nТеперь выберите вашу категорию:"
+        return msg, get_category_keyboard()
 
-    elif data == "cat_support":
+    # 2. Category selection step
+    if data.startswith("cat_"):
+        selected_cat = data.replace("cat_", "")
+        user_data = await ctx.update_data(category=selected_cat)
+        city = user_data.get("city", "Москва")
+
+        # Save to MySQL persistence
+        await save_user_profile(user_id, city, selected_cat)
+        await ctx.set_state(SocialCompasSG.MAIN_MENU)
+
         msg = (
-            "💳 Социальные выплаты и льготы\n\n"
-            "Раздел включает информацию о:\n"
-            "- Едином пособии для семей с детьми\n"
-            "- Льготах для студентов и пенсионеров\n"
-            "- Субсидиях на ЖКХ и проезд"
-        )
-        return msg, get_back_keyboard()
-
-    elif data == "cat_events":
-        msg = (
-            "📅 Городские и социальные мероприятия\n\n"
-            "Актуальное расписание:\n"
-            "1. 🎨 Бесплатный мастер-класс для детей — Завтра, 15:00\n"
-            "2. 🏃‍♂️ Забег здоровья и эко-субботник — Суббота, 10:00\n"
-            "3. 💻 Курсы цифровой грамотности — Понедельник, 18:00"
-        )
-        return msg, get_back_keyboard()
-
-    elif data == "cat_legal":
-        msg = (
-            "⚖️ Бесплатная юридическая помощь\n\n"
-            "Консультации юристов по вопросам:\n"
-            "- Трудового права\n"
-            "- Защиты прав потребителей\n"
-            "- Оформления документов и справок"
-        )
-        return msg, get_back_keyboard()
-
-    elif data == "cat_volunteer":
-        msg = (
-            "🤝 Волонтерский центр\n\n"
-            "Присоединяйтесь к добрым делам!\n"
-            "- Помощь пожилым людям\n"
-            "- Экологические инициативы\n"
-            "- Помощь животным в приютах"
-        )
-        return msg, get_back_keyboard()
-
-    elif data in ("menu_info", "menu_help"):
-        msg = (
-            "ℹ️ О платформе MAX Messenger & SocialCompas\n\n"
-            "Модульная архитектура: Transport, FSM, Storage (Redis + MySQL).\n"
-            "Готов к подключению сценариев Miro!"
+            "Благодарю за ответы! Вы сможете изменить их позже в настройках.\n"
+            "Интересные места уже ждут вас."
         )
         return msg, get_main_menu_keyboard()
 
-    elif data == "menu_main":
-        return "🏠 Главное меню SocialCompas\n\nВыберите действие:", get_main_menu_keyboard()
+    # 3. Main menu navigation
+    if data == "menu_main":
+        await ctx.set_state(SocialCompasSG.MAIN_MENU)
+        return "🏠 Главное меню Социального Компаса:", get_main_menu_keyboard()
 
-    return f"Вы выбрали: {data}", get_main_menu_keyboard()
+    # 4. View Places List
+    if data == "view_places":
+        profile = await get_user_profile(user_id)
+        fsm_data = await ctx.get_data()
+        city = profile["city"] if profile else fsm_data.get("city", "Москва")
+        category = profile["category"] if profile else fsm_data.get("category", "Студент")
+
+        places = await get_places_by_filter(city, category)
+        await ctx.set_state(SocialCompasSG.PLACES_LIST)
+
+        if not places:
+            msg = f"📍 В городе *{city}* для категории *{category}* места пока не найдены."
+            return msg, get_main_menu_keyboard()
+
+        msg = f"📍 *Список мест в г. {city} ({category})*:\n\nВыберите место, которое планируете посетить:"
+        return msg, get_places_list_keyboard(places)
+
+    # 5. View Place Detail
+    if data.startswith("place_"):
+        try:
+            place_id = int(data.replace("place_", ""))
+            place = await get_place_by_id(place_id)
+            if not place:
+                return "⚠️ Место не найдено.", get_main_menu_keyboard()
+
+            await ctx.set_state(SocialCompasSG.PLACE_DETAIL)
+            is_fav = await is_favorite(user_id, place_id)
+
+            msg = (
+                f"🏛 *{place['title']}*\n\n"
+                f"{place['description']}\n\n"
+                f"ℹ️ {place['discount_info']}\n\n"
+                f"_{place['discount_info']}_"
+            )
+            return msg, get_place_detail_keyboard(place_id, is_fav, place["map_url"])
+        except ValueError:
+            pass
+
+    # 6. Add/Remove Favorites
+    if data.startswith("add_fav_"):
+        place_id = int(data.replace("add_fav_", ""))
+        await add_favorite(user_id, place_id)
+        place = await get_place_by_id(place_id)
+        msg = f"✅ Место *{place['title'] if place else ''}* добавлено в избранное!"
+        return msg, get_place_detail_keyboard(place_id, True, place["map_url"] if place else "#")
+
+    if data.startswith("rem_fav_"):
+        place_id = int(data.replace("rem_fav_", ""))
+        await remove_favorite(user_id, place_id)
+        place = await get_place_by_id(place_id)
+        msg = f"❌ Место *{place['title'] if place else ''}* удалено из избранного."
+        return msg, get_place_detail_keyboard(place_id, False, place["map_url"] if place else "#")
+
+    # 7. View Favorites List
+    if data == "view_favorites":
+        await ctx.set_state(SocialCompasSG.FAVORITES)
+        favs = await get_user_favorites(user_id)
+
+        if not favs:
+            msg = "⭐ *Ваши сохраненные места*\n\nУ вас пока нет добавленных мест в избранное."
+            return msg, get_main_menu_keyboard()
+
+        msg = "⭐ *Ваши сохраненные места*:\n\nВыберите место для просмотра:"
+        return msg, get_places_list_keyboard(favs)
+
+    # 8. Settings Screen
+    if data == "view_settings":
+        await ctx.set_state(SocialCompasSG.SETTINGS)
+        profile = await get_user_profile(user_id)
+        fsm_data = await ctx.get_data()
+        city = profile["city"] if profile else fsm_data.get("city", "Не выбран")
+        category = profile["category"] if profile else fsm_data.get("category", "Не выбрана")
+
+        msg = (
+            "⚙️ *Настройки профиля*\n\n"
+            f"• Ваш город: *{city}*\n"
+            f"• Категория: *{category}*\n\n"
+            "Вы можете изменить данные в боте или в мини-приложении."
+        )
+        return msg, get_settings_keyboard()
+
+    # 9. Edit Data (Re-run survey)
+    if data == "edit_profile":
+        await ctx.set_state(SocialCompasSG.SELECT_CITY)
+        msg = "✏️ *Изменение профиля*\n\nВыберите ваш новый город:"
+        return msg, get_city_keyboard()
+
+    return "Выберите действие из меню:", get_main_menu_keyboard()
