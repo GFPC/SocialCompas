@@ -6,16 +6,39 @@ from fastapi.responses import HTMLResponse
 import uvicorn
 
 import config
-from handlers import BotHandlers
+from transport import MaxBotTransport, parse_update, CallbackEvent, MessageEvent
+from fsm import MemoryStorage
+from handlers import Dispatcher
 
 logger = logging.getLogger("simulator")
 logging.basicConfig(level=logging.INFO)
 
-handlers = BotHandlers()
-app = FastAPI(title="MAX Bot SocialCompas Simulator")
+# Dummy transport capturing sent messages for web UI simulation
+class SimTransport(MaxBotTransport):
+    def __init__(self):
+        super().__init__()
+        self.last_response = {}
 
-# In-memory history for local web chat
-chat_history = []
+    async def send_message(self, chat_id, text, keyboard=None):
+        buttons = []
+        if keyboard:
+            buttons = keyboard
+        self.last_response = {
+            "chat_id": str(chat_id),
+            "text": text,
+            "keyboard": {"inline_keyboard": buttons}
+        }
+        return {"ok": True}
+
+    async def answer_callback(self, callback_id, notification="ОК"):
+        return {"ok": True}
+
+
+sim_transport = SimTransport()
+storage = MemoryStorage()
+dp = Dispatcher(transport=sim_transport, storage=storage)
+
+app = FastAPI(title="MAX Bot SocialCompas Simulator")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -98,7 +121,7 @@ async def get_simulator_ui():
                 const div = document.createElement("div");
                 div.className = "msg bot";
                 
-                let html = text.replace(/\\*(.*?)\\*/g, "<b>$1</b>");
+                let html = (text || "").replace(/\\*(.*?)\\*/g, "<b>$1</b>");
                 div.innerHTML = html;
 
                 if (keyboard && keyboard.inline_keyboard) {
@@ -111,7 +134,7 @@ async def get_simulator_ui():
                             const btnElem = document.createElement("button");
                             btnElem.className = "btn";
                             btnElem.textContent = btn.text;
-                            btnElem.onclick = () => sendMessage(btn.callback_data, true);
+                            btnElem.onclick = () => sendMessage(btn.callback_data || btn.url || btn.text, true);
                             rowDiv.appendChild(btnElem);
                         });
                         kbDiv.appendChild(rowDiv);
@@ -123,7 +146,6 @@ async def get_simulator_ui():
                 msgs.scrollTop = msgs.scrollHeight;
             }
 
-            // Initial auto-start
             window.onload = () => sendMessage("/start");
         </script>
     </body>
@@ -135,8 +157,9 @@ async def get_simulator_ui():
 @app.post("/api/simulate")
 async def simulate_update(request: Request):
     update = await request.json()
-    chat_id, response_text, keyboard = await handlers.handle_update(update)
-    return {"chat_id": chat_id, "text": response_text, "keyboard": keyboard}
+    sim_transport.last_response = {}
+    await dp.feed_update(update)
+    return sim_transport.last_response
 
 
 async def run_cli_simulator():
@@ -147,16 +170,10 @@ async def run_cli_simulator():
     print("=" * 50 + "\n")
 
     chat_id = "cli_user"
-    # Send initial start
     update = {"message": {"text": "/start", "chat": {"id": chat_id}}}
-    _, text, kb = await handlers.handle_update(update)
-    print(f"🤖 Bot:\n{text}\n")
-    if kb and "inline_keyboard" in kb:
-        print("🔘 Кнопки:")
-        for row in kb["inline_keyboard"]:
-            for btn in row:
-                print(f"  [{btn['text']}] -> (callback: {btn['callback_data']})")
-        print("-" * 50)
+    await dp.feed_update(update)
+    res = sim_transport.last_response
+    print(f"🤖 Bot:\n{res.get('text', '')}\n")
 
     while True:
         try:
@@ -168,19 +185,14 @@ async def run_cli_simulator():
                 continue
 
             if user_input.startswith("cb:"):
-                # Simulating button press
                 cb_data = user_input[3:].strip()
                 update = {"callback_query": {"data": cb_data, "message": {"chat": {"id": chat_id}}}}
             else:
                 update = {"message": {"text": user_input, "chat": {"id": chat_id}}}
 
-            _, text, kb = await handlers.handle_update(update)
-            print(f"\n🤖 Bot:\n{text}")
-            if kb and "inline_keyboard" in kb:
-                print("\n🔘 Кнопки:")
-                for row in kb["inline_keyboard"]:
-                    for btn in row:
-                        print(f"  [{btn['text']}] (наберите cb:{btn['callback_data']} для нажатия)")
+            await dp.feed_update(update)
+            res = sim_transport.last_response
+            print(f"\n🤖 Bot:\n{res.get('text', '')}")
         except (KeyboardInterrupt, EOFError):
             print("\nЗавершение работы симулятора.")
             break
