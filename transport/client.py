@@ -53,9 +53,12 @@ class MaxBotTransport:
         keyboard: Optional[List[List[Dict[str, str]]]] = None,
     ) -> Dict[str, Any]:
         """
-        Send a text message with optional inline keyboard.
+        Send a text message with optional inline keyboard and Markdown formatting.
         """
-        payload: Dict[str, Any] = {"text": text}
+        payload: Dict[str, Any] = {
+            "text": text,
+            "format": "markdown"
+        }
 
         if keyboard:
             max_buttons = []
