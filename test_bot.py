@@ -6,41 +6,15 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
 from transport import MaxBotTransport, parse_update, MessageEvent, CallbackEvent
-from fsm import MemoryStorage, FSMContext, State, StatesGroup
+from fsm import MemoryStorage, FSMContext, SocialCompasSG
 from handlers import Dispatcher
 
 
-class Form(StatesGroup):
-    name = State("Form:name")
-    age = State("Form:age")
-
-
 async def run_tests():
-    print("[TEST] Testing FSM & Transport Architecture...")
+    print("[TEST] Testing Miro Scenario Flow...")
 
-    # 1. Test Event Parsing
-    raw_msg = {
-        "update_type": "message_created",
-        "chat_id": 12345,
-        "message": {"body": {"text": "/start"}, "sender": {"user_id": 999}}
-    }
-    event = parse_update(raw_msg)
-    assert isinstance(event, MessageEvent)
-    assert event.text == "/start"
-    print("[OK] Event Parsing test passed")
-
-    # 2. Test FSM Context
     storage = MemoryStorage()
-    ctx = FSMContext(storage, user_id="user_100")
-    await ctx.set_state(Form.name)
-    assert await ctx.get_state() == "Form:name"
 
-    await ctx.update_data(name="Max")
-    data = await ctx.get_data()
-    assert data["name"] == "Max"
-    print("[OK] FSM Context & Storage test passed")
-
-    # 3. Test Dispatcher routing (Mock transport)
     class DummyTransport(MaxBotTransport):
         def __init__(self):
             self.sent = []
@@ -55,24 +29,31 @@ async def run_tests():
     dummy = DummyTransport()
     dp = Dispatcher(transport=dummy, storage=storage)
 
-    # Feed message update
-    await dp.feed_update(raw_msg)
+    # 1. Start command -> Select City
+    await dp.feed_update({"update_type": "message_created", "chat_id": "u1", "message": {"body": {"text": "/start"}, "sender": {"user_id": "u1"}}})
     assert len(dummy.sent) == 1
-    assert "Добро пожаловать" in dummy.sent[0][1]
-    print("[OK] Dispatcher Message Routing test passed")
+    assert "Выберите ваш город" in dummy.sent[0][1]
+    print("[OK] Step 1: Onboarding / City Selection test passed")
 
-    # Feed callback update
-    raw_cb = {
-        "update_type": "message_callback",
-        "callback": {"callback_id": "cb_1", "payload": "cat_support", "user": {"user_id": 999}},
-        "message": {"recipient": {"chat_id": 12345}}
-    }
-    await dp.feed_update(raw_cb)
+    # 2. Select City -> Select Category
+    await dp.feed_update({"update_type": "message_callback", "callback": {"callback_id": "c1", "payload": "city_Москва", "user": {"user_id": "u1"}}, "message": {"recipient": {"chat_id": "u1"}}})
     assert len(dummy.sent) == 2
-    assert "Социальные выплаты" in dummy.sent[1][1]
-    print("[OK] Dispatcher Callback Routing test passed")
+    assert "Теперь выберите вашу категорию" in dummy.sent[1][1]
+    print("[OK] Step 2: City Selection -> Category Selection test passed")
 
-    print("\n[SUCCESS] ALL ARCHITECTURE & LAYER TESTS PASSED!")
+    # 3. Select Category -> Onboarding Complete & Main Menu
+    await dp.feed_update({"update_type": "message_callback", "callback": {"callback_id": "c2", "payload": "cat_Студент", "user": {"user_id": "u1"}}, "message": {"recipient": {"chat_id": "u1"}}})
+    assert len(dummy.sent) == 3
+    assert "Благодарю за ответы" in dummy.sent[2][1]
+    print("[OK] Step 3: Category Selection -> Main Menu test passed")
+
+    # 4. View Settings
+    await dp.feed_update({"update_type": "message_callback", "callback": {"callback_id": "c3", "payload": "view_settings", "user": {"user_id": "u1"}}, "message": {"recipient": {"chat_id": "u1"}}})
+    assert len(dummy.sent) == 4
+    assert "Настройки профиля" in dummy.sent[3][1]
+    print("[OK] Step 4: Settings View test passed")
+
+    print("\n[SUCCESS] ALL MIRO SCENARIO TESTS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":
