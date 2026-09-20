@@ -39,7 +39,7 @@ def get_main_menu_keyboard() -> List[List[Dict[str, str]]]:
     return [
         [{"text": "📍 Список мест и акций", "callback_data": "view_places"}],
         [{"text": "⭐ Избранное", "callback_data": "view_favorites"}],
-        [{"text": "📱 Перейти в мини приложение", "url": "https://max.ru"}],
+        [{"text": "📱 Перейти в мини приложение", "url": "https://miniapp-one-snowy.vercel.app/"}],
         [{"text": "⚙️ Настройки", "callback_data": "view_settings"}],
     ]
 
