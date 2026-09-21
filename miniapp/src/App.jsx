@@ -265,7 +265,7 @@ function PlaceDetailView({ place, isFav, onToggleFav, onBack }) {
           {place.map_url && (
             <a href={place.map_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
               <button className="btn btn-outline">
-                <ExternalLink size={18} /> Посмотреть на карте / сайте
+                <ExternalLink size={18} /> Посмотреть на карте
               </button>
             </a>
           )}
