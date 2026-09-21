@@ -8,10 +8,13 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
 # Add root directory to sys.path
-sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
+BASE_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, BASE_DIR)
 import config
 
 EXCEL_FILES = [
+    os.path.join(BASE_DIR, "data", "БД акции по городам.xlsx"),
+    os.path.join(BASE_DIR, "data", "Санкт-Петербург.xlsx"),
     r"C:\Users\greg\Downloads\БД акции по городам.xlsx",
     r"C:\Users\greg\Downloads\Санкт-Петербург.xlsx",
 ]
@@ -28,6 +31,7 @@ async def import_excel_data():
     )
 
     total_imported = 0
+    processed_paths = set()
 
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
@@ -41,8 +45,12 @@ async def import_excel_data():
 
             for file_path in EXCEL_FILES:
                 if not os.path.exists(file_path):
-                    print(f"⚠️ Файл не найден: {file_path}")
                     continue
+
+                filename = os.path.basename(file_path)
+                if filename in processed_paths:
+                    continue
+                processed_paths.add(filename)
 
                 print(f"📦 Импорт данных из Excel: {file_path}")
                 wb = openpyxl.load_workbook(file_path)
@@ -69,7 +77,7 @@ async def import_excel_data():
                     file_count += 1
 
                 total_imported += file_count
-                print(f"  -> Добавлено {file_count} записей из {os.path.basename(file_path)}")
+                print(f"  -> Добавлено {file_count} записей из {filename}")
 
     pool.close()
     await pool.wait_closed()
