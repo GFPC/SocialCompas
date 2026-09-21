@@ -1,0 +1,70 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: socialcompas_app
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - MAX_BOT_TOKEN=${MAX_BOT_TOKEN:-f9LHodD0cOKJ27213jylpqBMZA8H_P0u3QbcT1BLiTTddljfzGamPNuJ288lrt5pIhS9ho3Tkr0_PVCApNg8}
+      - MAX_API_URL=https://platform-api2.max.ru
+      - SIMULATION_MODE=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=bot_user
+      - MYSQL_PASSWORD=bot_password
+      - MYSQL_DB=socialcompas_db
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+
+  mysql:
+    image: mysql:8.0
+    container_name: socialcompas_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: socialcompas_db
+      MYSQL_USER: bot_user
+      MYSQL_PASSWORD: bot_password
+    volumes:
+      - mysql_prod_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: socialcompas_redis
+    restart: always
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_net
+
+volumes:
+  mysql_prod_data:
+  redis_prod_data:
+
+networks:
+  app_net:
+    driver: bridge
