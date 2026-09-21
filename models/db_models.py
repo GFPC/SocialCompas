@@ -5,6 +5,15 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
+class UserState(Base):
+    __tablename__ = "user_states"
+
+    user_id = Column(String(64), primary_key=True)
+    state = Column(String(128), nullable=True)
+    data = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Place(Base):
     __tablename__ = "places"
 
