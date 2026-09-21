@@ -30,9 +30,9 @@ def get_city_keyboard() -> List[List[Dict[str, str]]]:
 
 def get_category_keyboard() -> List[List[Dict[str, str]]]:
     return [
-        [{"text": "🎓 Студенты", "callback_data": "cat_Студенты"}],
-        [{"text": "👴 Пенсионеры", "callback_data": "cat_Пенсионеры"}],
-        [{"text": "🪖 Участники СВО", "callback_data": "cat_Участники СВО"}],
+        [{"text": "🎓 Студент", "callback_data": "cat_Студенты"}],
+        [{"text": "👴 Пенсионер", "callback_data": "cat_Пенсионеры"}],
+        [{"text": "🪖 Участник СВО", "callback_data": "cat_Участники СВО"}],
     ]
 
 
@@ -68,7 +68,7 @@ def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str) -> List
 
     return [
         [{"text": fav_btn_text, "callback_data": fav_cb}],
-        [{"text": "🗺 Перейти на сайт / карту", "url": map_url if map_url else "https://max.ru"}],
+        [{"text": "🗺 Посмотреть на карте", "url": map_url if map_url else "https://max.ru"}],
         [{"text": "🔙 К списку мест", "callback_data": "view_places"}],
         [{"text": "🏠 Вернуться на главную", "callback_data": "menu_main"}],
     ]
