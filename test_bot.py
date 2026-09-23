@@ -1,16 +1,18 @@
 import asyncio
 import sys
+from fastapi.testclient import TestClient
 
 # Force UTF-8 stdout encoding for Windows console
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
+from main import app
 from transport import MaxBotTransport, parse_update, MessageEvent, CallbackEvent
 from fsm import MemoryStorage, FSMContext, SocialCompasSG
 from handlers import Dispatcher
 
 
-async def run_tests():
+async def run_bot_tests():
     print("[TEST] Testing Miro Scenario Flow...")
 
     storage = MemoryStorage()
@@ -53,8 +55,52 @@ async def run_tests():
     assert "Настройки профиля" in dummy.sent[3][1]
     print("[OK] Step 4: Settings View test passed")
 
-    print("\n[SUCCESS] ALL MIRO SCENARIO TESTS PASSED SUCCESSFULLY!")
+
+def run_api_tests():
+    print("\n[TEST] Testing API Endpoints & Security Token Auth...")
+    client = TestClient(app)
+
+    # 1. GET /api/v1/cities
+    res = client.get("/api/v1/cities")
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["ok"] is True
+    assert len(data["items"]) >= 3
+    print("[OK] API Step 1: GET /api/v1/cities passed")
+
+    # 2. GET /api/v1/categories
+    res = client.get("/api/v1/categories")
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["ok"] is True
+    assert len(data["items"]) >= 3
+    print("[OK] API Step 2: GET /api/v1/categories passed")
+
+    # 3. POST /api/v1/auth/token
+    res = client.post("/api/v1/auth/token", json={"user_id": "user_test_123"})
+    assert res.status_code == 200, res.text
+    token = res.json().get("token")
+    assert token is not None
+    print("[OK] API Step 3: Token Generation POST /api/v1/auth/token passed")
+
+    # 4. GET /api/v1/favorites without token -> 401 Unauthorized
+    res = client.get("/api/v1/favorites")
+    assert res.status_code == 401
+    print("[OK] API Step 4: Protected route GET /api/v1/favorites without token correctly rejected (401)")
+
+    # 5. GET /api/v1/favorites with Bearer Token -> 200 OK
+    headers = {"Authorization": f"Bearer {token}"}
+    res = client.get("/api/v1/favorites", headers=headers)
+    assert res.status_code == 200, res.text
+    print("[OK] API Step 5: Protected route GET /api/v1/favorites with valid Bearer Token passed (200)")
+
+    # 6. GET /api/v1/profile/me with Bearer Token -> 200 OK
+    res = client.get("/api/v1/profile/me", headers=headers)
+    assert res.status_code == 200, res.text
+    print("[OK] API Step 6: Protected route GET /api/v1/profile/me passed (200)")
 
 
 if __name__ == "__main__":
-    asyncio.run(run_tests())
+    asyncio.run(run_bot_tests())
+    run_api_tests()
+    print("\n[SUCCESS] ALL BOT AND API SECURITY TESTS PASSED SUCCESSFULLY!")
