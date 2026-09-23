@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 from typing import Optional
+from urllib.parse import parse_qsl
 from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import config
@@ -62,6 +63,51 @@ def verify_user_token(token: str) -> Optional[str]:
         return str(payload_data.get("uid"))
     except Exception as exc:
         logger.error(f"Error verifying token: {exc}")
+        return None
+
+
+def verify_webapp_init_data(init_data: str, max_age: int = 86400) -> Optional[dict]:
+    """
+    Cryptographically verifies the HMAC signature of MAX/Telegram WebApp initData string.
+    Returns parsed payload if signature is valid and not expired, else None.
+    """
+    if not init_data or "hash=" not in init_data:
+        return None
+
+    try:
+        parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+        received_hash = parsed_data.pop("hash", None)
+        if not received_hash:
+            return None
+
+        # Sort key=value pairs alphabetically joined by \n
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
+
+        # Derive secret key using bot token
+        bot_token = config.MAX_BOT_TOKEN
+        secret_key = hmac.new(b"WebAppData", bot_token.encode('utf-8'), hashlib.sha256).digest()
+        calculated_hash = hmac.new(secret_key, data_check_string.encode('utf-8'), hashlib.sha256).hexdigest()
+
+        if not hmac.compare_digest(received_hash, calculated_hash):
+            logger.warning("Invalid WebApp initData HMAC signature!")
+            return None
+
+        # Check auth_date age (optional max_age check if auth_date present)
+        auth_date = int(parsed_data.get("auth_date", 0))
+        if auth_date > 0 and (time.time() - auth_date) > max_age:
+            logger.warning("Expired WebApp initData auth_date!")
+            return None
+
+        # Parse user JSON field if available
+        if "user" in parsed_data:
+            try:
+                parsed_data["user_data"] = json.loads(parsed_data["user"])
+            except Exception:
+                pass
+
+        return parsed_data
+    except Exception as exc:
+        logger.error(f"Error validating WebApp initData: {exc}")
         return None
 
 
