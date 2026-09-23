@@ -47,6 +47,11 @@ jobs:
             cd /home/SocialCompas
             git pull origin main
             
+            echo "📋 Updating Nginx Configuration..."
+            cp /home/SocialCompas/scripts/nginx_socialcompass.conf /etc/nginx/sites-available/socialcompass
+            ln -sf /etc/nginx/sites-available/socialcompass /etc/nginx/sites-enabled/socialcompass
+            nginx -t && systemctl reload nginx
+
             echo "📦 Building MiniApp Frontend..."
             cd miniapp
             npm install
@@ -55,8 +60,5 @@ jobs:
             
             echo "🐳 Restarting Docker Services..."
             docker compose -f docker-compose.prod.yml up -d --build
-            
-            echo "🔄 Reloading Nginx..."
-            systemctl reload nginx
             
             echo "✅ Deployment Finished Successfully!"
