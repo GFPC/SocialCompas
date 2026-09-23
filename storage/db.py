@@ -71,6 +71,30 @@ async def init_db():
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """)
 
+                # 5. Cities Catalog
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS cities (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(64) NOT NULL UNIQUE,
+                        is_active TINYINT(1) DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                """)
+
+                # 6. Categories Catalog
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS categories (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(64) NOT NULL UNIQUE,
+                        is_active TINYINT(1) DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                """)
+
+                # Seed cities & categories if empty
+                await cur.execute("INSERT IGNORE INTO cities (name) VALUES ('Москва'), ('Новосибирск'), ('Санкт-Петербург');")
+                await cur.execute("INSERT IGNORE INTO categories (name) VALUES ('Студенты'), ('Пенсионеры'), ('Участники СВО');")
+
                 # Seed initial places data if empty
                 await cur.execute("SELECT COUNT(*) FROM places;")
                 count = (await cur.fetchone())[0]
@@ -231,3 +255,48 @@ async def is_favorite(user_id: str, place_id: int) -> bool:
             )
             row = await cur.fetchone()
             return row is not None
+
+
+async def get_all_cities() -> List[Dict[str, Any]]:
+    """Fetches all active cities from DB."""
+    pool = await get_db_pool()
+    if not pool:
+        return [
+            {"id": 1, "name": "Москва", "is_active": 1},
+            {"id": 2, "name": "Новосибирск", "is_active": 1},
+            {"id": 3, "name": "Санкт-Петербург", "is_active": 1},
+        ]
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT id, name, is_active FROM cities WHERE is_active = 1 ORDER BY id ASC;")
+            rows = await cur.fetchall()
+            if not rows:
+                return [
+                    {"id": 1, "name": "Москва", "is_active": 1},
+                    {"id": 2, "name": "Новосибирск", "is_active": 1},
+                    {"id": 3, "name": "Санкт-Петербург", "is_active": 1},
+                ]
+            return rows
+
+
+async def get_all_categories() -> List[Dict[str, Any]]:
+    """Fetches all active categories from DB."""
+    pool = await get_db_pool()
+    if not pool:
+        return [
+            {"id": 1, "name": "Студенты", "is_active": 1},
+            {"id": 2, "name": "Пенсионеры", "is_active": 1},
+            {"id": 3, "name": "Участники СВО", "is_active": 1},
+        ]
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT id, name, is_active FROM categories WHERE is_active = 1 ORDER BY id ASC;")
+            rows = await cur.fetchall()
+            if not rows:
+                return [
+                    {"id": 1, "name": "Студенты", "is_active": 1},
+                    {"id": 2, "name": "Пенсионеры", "is_active": 1},
+                    {"id": 3, "name": "Участники СВО", "is_active": 1},
+                ]
+            return rows
+
