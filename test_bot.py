@@ -1,11 +1,17 @@
 import asyncio
 import sys
+import hmac
+import hashlib
+import json
+import time
+from urllib.parse import urlencode
 from fastapi.testclient import TestClient
 
 # Force UTF-8 stdout encoding for Windows console
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
+import config
 from main import app
 from transport import MaxBotTransport, parse_update, MessageEvent, CallbackEvent
 from fsm import MemoryStorage, FSMContext, SocialCompasSG
@@ -98,6 +104,27 @@ def run_api_tests():
     res = client.get("/api/v1/profile/me", headers=headers)
     assert res.status_code == 200, res.text
     print("[OK] API Step 6: Protected route GET /api/v1/profile/me passed (200)")
+
+    # 7. WebApp initData HMAC verification
+    user_json = json.dumps({"id": 998877, "first_name": "SecureUser"}, separators=(',', ':'))
+    auth_date = str(int(time.time()))
+    data_dict = {"auth_date": auth_date, "user": user_json}
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data_dict.items()))
+    secret_key = hmac.new(b"WebAppData", config.MAX_BOT_TOKEN.encode('utf-8'), hashlib.sha256).digest()
+    hash_val = hmac.new(secret_key, data_check_string.encode('utf-8'), hashlib.sha256).hexdigest()
+    data_dict["hash"] = hash_val
+    valid_init_data = urlencode(data_dict)
+
+    res = client.post("/api/v1/auth/webapp", json={"init_data": valid_init_data})
+    assert res.status_code == 200, res.text
+    assert res.json()["user_id"] == "998877"
+    print("[OK] API Step 7: WebApp initData HMAC verification passed (200 OK)")
+
+    # Tampered initData -> 401 Unauthorized
+    tampered_init_data = valid_init_data.replace("998877", "111111")
+    res = client.post("/api/v1/auth/webapp", json={"init_data": tampered_init_data})
+    assert res.status_code == 401
+    print("[OK] API Step 8: Tampered initData correctly rejected with 401 Unauthorized")
 
 
 if __name__ == "__main__":
