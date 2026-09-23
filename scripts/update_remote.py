@@ -17,6 +17,7 @@ def run():
     
     commands = [
         ("Git Pull", f"cd {PROJECT_DIR} && git pull origin main"),
+        ("Copy & Reload Nginx Config", f"cp {PROJECT_DIR}/scripts/nginx_socialcompass.conf /etc/nginx/sites-available/socialcompass && ln -sf /etc/nginx/sites-available/socialcompass /etc/nginx/sites-enabled/socialcompass && nginx -t && systemctl reload nginx"),
         ("Docker compose build & up", f"cd {PROJECT_DIR} && docker compose -f docker-compose.prod.yml up -d --build"),
         ("Alembic Upgrade", f"docker exec socialcompas_app alembic upgrade head"),
         ("Import Excel Data", f"docker exec socialcompas_app python scripts/import_excel.py"),
