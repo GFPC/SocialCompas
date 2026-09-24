@@ -105,6 +105,7 @@ def main():
         start_web_simulator(host=config.HOST, port=config.PORT)
     else:
         async def run_bot_and_api():
+            await init_db()
             storage = await setup_fsm_storage()
             dp = Dispatcher(transport=transport, storage=storage)
 
