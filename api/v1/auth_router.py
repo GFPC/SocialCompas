@@ -9,15 +9,11 @@ class WebAppAuthRequest(BaseModel):
     init_data: str
 
 
-class TokenRequest(BaseModel):
-    user_id: str
-
-
 @router.post("/webapp")
 async def webapp_auth(req: WebAppAuthRequest):
     """
     Проверяет криптографическую подпись (HMAC-SHA256) строки WebApp initData от MAX Messenger / Telegram.
-    При успешной проверке подписи генерирует подлинный токен авторизации для пользователя.
+    При успешной проверке подписи генерирует подлинный JWT токен авторизации для пользователя.
     """
     verified_data = verify_webapp_init_data(req.init_data)
     if not verified_data:
@@ -38,15 +34,3 @@ async def webapp_auth(req: WebAppAuthRequest):
         "expires_in": 2592000,
         "user": user_data
     }
-
-
-@router.post("/token")
-async def issue_token(req: TokenRequest):
-    """
-    Генерирует токен авторизации по user_id (для серверных тестов).
-    """
-    if not req.user_id or len(req.user_id.strip()) == 0:
-        raise HTTPException(status_code=400, detail="Неверный user_id")
-
-    token = create_user_token(req.user_id)
-    return {"ok": True, "token": token, "expires_in": 2592000}

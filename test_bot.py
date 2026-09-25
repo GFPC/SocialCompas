@@ -63,10 +63,10 @@ async def run_bot_tests():
 
 
 def run_api_tests():
-    print("\n[TEST] Testing API Endpoints & Security Token Auth...")
+    print("\n[TEST] Testing Strict API Security & JWT Token Enforcement...")
     client = TestClient(app)
 
-    # 1. GET /api/v1/cities
+    # 1. GET /api/v1/cities (Public metadata)
     res = client.get("/api/v1/cities")
     assert res.status_code == 200, res.text
     data = res.json()
@@ -74,7 +74,7 @@ def run_api_tests():
     assert len(data["items"]) >= 3
     print("[OK] API Step 1: GET /api/v1/cities passed")
 
-    # 2. GET /api/v1/categories
+    # 2. GET /api/v1/categories (Public metadata)
     res = client.get("/api/v1/categories")
     assert res.status_code == 200, res.text
     data = res.json()
@@ -82,30 +82,7 @@ def run_api_tests():
     assert len(data["items"]) >= 3
     print("[OK] API Step 2: GET /api/v1/categories passed")
 
-    # 3. POST /api/v1/auth/token
-    res = client.post("/api/v1/auth/token", json={"user_id": "user_test_123"})
-    assert res.status_code == 200, res.text
-    token = res.json().get("token")
-    assert token is not None
-    print("[OK] API Step 3: Token Generation POST /api/v1/auth/token passed")
-
-    # 4. GET /api/v1/favorites without token -> 401 Unauthorized
-    res = client.get("/api/v1/favorites")
-    assert res.status_code == 401
-    print("[OK] API Step 4: Protected route GET /api/v1/favorites without token correctly rejected (401)")
-
-    # 5. GET /api/v1/favorites with Bearer Token -> 200 OK
-    headers = {"Authorization": f"Bearer {token}"}
-    res = client.get("/api/v1/favorites", headers=headers)
-    assert res.status_code == 200, res.text
-    print("[OK] API Step 5: Protected route GET /api/v1/favorites with valid Bearer Token passed (200)")
-
-    # 6. GET /api/v1/profile/me with Bearer Token -> 200 OK
-    res = client.get("/api/v1/profile/me", headers=headers)
-    assert res.status_code == 200, res.text
-    print("[OK] API Step 6: Protected route GET /api/v1/profile/me passed (200)")
-
-    # 7. WebApp initData HMAC verification
+    # 3. Authenticate ONLY via valid WebApp initData HMAC
     user_json = json.dumps({"id": 998877, "first_name": "SecureUser"}, separators=(',', ':'))
     auth_date = str(int(time.time()))
     data_dict = {"auth_date": auth_date, "user": user_json}
@@ -117,17 +94,49 @@ def run_api_tests():
 
     res = client.post("/api/v1/auth/webapp", json={"init_data": valid_init_data})
     assert res.status_code == 200, res.text
+    token = res.json().get("token")
+    assert token is not None
     assert res.json()["user_id"] == "998877"
-    print("[OK] API Step 7: WebApp initData HMAC verification passed (200 OK)")
+    print("[OK] API Step 3: WebApp initData HMAC authentication passed (200 OK & JWT issued)")
 
-    # Tampered initData -> 401 Unauthorized
+    # 4. Reject tampered initData -> 401 Unauthorized
     tampered_init_data = valid_init_data.replace("998877", "111111")
     res = client.post("/api/v1/auth/webapp", json={"init_data": tampered_init_data})
     assert res.status_code == 401
-    print("[OK] API Step 8: Tampered initData correctly rejected with 401 Unauthorized")
+    print("[OK] API Step 4: Tampered initData correctly rejected with 401 Unauthorized")
+
+    # 5. Protected route GET /api/v1/favorites without JWT -> 401 Unauthorized
+    res = client.get("/api/v1/favorites")
+    assert res.status_code == 401
+    print("[OK] API Step 5: GET /api/v1/favorites without JWT correctly rejected (401)")
+
+    # 6. Protected route GET /api/v1/favorites with valid JWT -> 200 OK
+    headers = {"Authorization": f"Bearer {token}"}
+    res = client.get("/api/v1/favorites", headers=headers)
+    assert res.status_code == 200, res.text
+    print("[OK] API Step 6: GET /api/v1/favorites with valid JWT passed (200)")
+
+    # 7. Protected route GET /api/v1/profile/me without JWT -> 401 Unauthorized
+    res = client.get("/api/v1/profile/me")
+    assert res.status_code == 401
+    print("[OK] API Step 7: GET /api/v1/profile/me without JWT correctly rejected (401)")
+
+    # 8. Protected route GET /api/v1/profile/me with valid JWT -> 200 OK
+    res = client.get("/api/v1/profile/me", headers=headers)
+    assert res.status_code == 200, res.text
+    print("[OK] API Step 8: GET /api/v1/profile/me with valid JWT passed (200)")
+
+    # 9. Verify legacy unauthenticated routes by user_id are deleted -> 404 Not Found
+    res = client.get("/api/v1/favorites/998877")
+    assert res.status_code == 404
+    res = client.get("/api/v1/profile/998877")
+    assert res.status_code == 404
+    res = client.post("/api/v1/auth/token", json={"user_id": "998877"})
+    assert res.status_code == 404
+    print("[OK] API Step 9: Legacy unauthenticated routes by user_id completely removed (404)")
 
 
 if __name__ == "__main__":
     asyncio.run(run_bot_tests())
     run_api_tests()
-    print("\n[SUCCESS] ALL BOT AND API SECURITY TESTS PASSED SUCCESSFULLY!")
+    print("\n[SUCCESS] ALL STRICT SECURITY & JWT TESTS PASSED SUCCESSFULLY!")
