@@ -1,10 +1,11 @@
 import React from 'react';
-import { Home, Heart, User } from 'lucide-react';
+import { Home, Heart, MessageCircle, User } from 'lucide-react';
 
 const TABS = [
-  { id: 'places',    icon: Home,  label: 'Главная' },
-  { id: 'favorites', icon: Heart, label: 'Избранное' },
-  { id: 'profile',   icon: User,  label: 'Профиль' },
+  { id: 'places',    icon: Home,            label: 'Главная' },
+  { id: 'favorites', icon: Heart,           label: 'Избранное' },
+  { id: 'chat',      icon: MessageCircle,   label: 'Чат с ИИ' },
+  { id: 'profile',   icon: User,            label: 'Профиль' },
 ];
 
 export default function BottomNav({ active, onChange, favoritesCount = 0 }) {

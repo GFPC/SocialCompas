@@ -1,17 +1,34 @@
 import React from 'react';
 import { Heart, MapPin, Trash2 } from 'lucide-react';
+import { getPlaceImage } from '../utils/placeImages';
 
 const CATEGORY_EMOJI = {
+  // Категории пользователей (fallback)
   'Студенты': '🎓',
   'Пенсионеры': '👵',
   'Участники СВО': '🎖',
-  'default': '📍',
+
+  // Типы мест
+  'Аквапарк': '🏊',
+  'Музей': '🏛️',
+  'Бильярдный клуб': '🎱',
+  'Боулинг клуб': '🎳',
+  'Зоопарк': '🦁',
+  'Кинотеатр': '🎬',
+  'Термальный комплекс': '♨️',
+  'Котокафе': '🐱',
+  'Кафе': '☕',
+  'Спорт': '🏋️',
+
+  default: '📍',
 };
 
-function bannerStyle(place) {
-  if (place.image_url) return null;
-  const emoji = CATEGORY_EMOJI[place.category] || CATEGORY_EMOJI[place.place_type] || CATEGORY_EMOJI.default;
-  return emoji;
+function getEmoji(place) {
+  return (
+    CATEGORY_EMOJI[place.place_type] ||
+    CATEGORY_EMOJI[place.category] ||
+    CATEGORY_EMOJI.default
+  );
 }
 
 export default function PlaceCard({
@@ -19,15 +36,16 @@ export default function PlaceCard({
   isFav,
   onSelect,
   onToggleFav,
-  onDelete,          // для избранного
+  onDelete, // для избранного
 }) {
-  const emoji = bannerStyle(place);
+  const image = getPlaceImage(place);
+  const emoji = getEmoji(place);
 
   return (
     <article className="place-card clickable">
       <div className="place-banner" onClick={onSelect}>
-        {place.image_url ? (
-          <img src={place.image_url} alt={place.title} loading="lazy" />
+        {image ? (
+          <img src={image} alt={place.title} loading="lazy" />
         ) : (
           <span className="banner-emoji">{emoji}</span>
         )}
@@ -40,7 +58,9 @@ export default function PlaceCard({
           <p className="place-promo-line">{place.promo_text}</p>
         )}
         {place.address && (
-          <p className="place-address"><MapPin size={13} />{place.address}</p>
+          <p className="place-address">
+            <MapPin size={13} /> {place.address}
+          </p>
         )}
       </div>
 

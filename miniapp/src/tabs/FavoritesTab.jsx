@@ -4,51 +4,55 @@ import PlaceCard from '../components/PlaceCard';
 
 export default function FavoritesTab({
   favorites,
-  placeType,
+  selectedTypes,
   onSelect,
   onToggleFav,
   onRemove,
 }) {
   const filtered = useMemo(() => {
-    if (!placeType) return favorites;
-    return favorites.filter((p) => p.place_type === placeType);
-  }, [favorites, placeType]);
+    if (!selectedTypes || selectedTypes.length === 0) return favorites;
+    return favorites.filter((p) => selectedTypes.includes(p.place_type));
+  }, [favorites, selectedTypes]);
+
+  const headerLabel =
+    selectedTypes && selectedTypes.length > 0
+      ? `Избранное: ${selectedTypes.join(', ')}`
+      : 'Сохранённые места';
 
   return (
     <>
       <h2 className="section-title">
-        {placeType ? `Избранное: ${placeType}` : 'Сохранённые места'}{' '}
-        <span className="count">{filtered.length}</span>
+        {headerLabel} <span className="count">{filtered.length}</span>
       </h2>
 
       {filtered.length === 0 ? (
         <div className="empty">
-          <div className="empty-icon">
-            <Heart size={36} />
-          </div>
+          <div className="empty-icon"><Heart size={36} /></div>
           <h3>
-            {placeType && favorites.length > 0
+            {selectedTypes?.length && favorites.length > 0
               ? 'Нет совпадений'
               : 'Пока ничего не сохранено'}
           </h3>
           <p>
-            {placeType && favorites.length > 0
-              ? `Среди избранного нет мест типа «${placeType}»`
-              : 'Нажимайте на ♥, чтобы сохранить'}
+            {selectedTypes?.length && favorites.length > 0
+              ? `Среди избранного нет мест выбранных типов`
+              : 'Нажимайте ♥ на карточках мест, чтобы добавить сюда'}
           </p>
         </div>
       ) : (
-        filtered.map((place) => (
-          <PlaceCard
-            key={place.id}
-            place={place}
-            isFav
-            onSelect={() => onSelect(place)}
-            onToggleFav={() => onToggleFav(place)}
-            onDelete={() => onRemove(place)}
-          />
-        ))
-      )}
+  <div className="favorites-grid">
+    {filtered.map((place) => (
+      <PlaceCard
+        key={place.id}
+        place={place}
+        isFav
+        onSelect={() => onSelect(place)}
+        onToggleFav={() => onToggleFav(place)}
+        onDelete={() => onRemove(place)}
+      />
+    ))}
+  </div>
+)}
     </>
   );
 }

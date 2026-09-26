@@ -6,7 +6,7 @@ export default function PlacesTab({
   places,
   loading,
   favorites,
-  placeType,
+  selectedTypes,
   onSelect,
   onToggleFav,
 }) {
@@ -15,12 +15,12 @@ export default function PlacesTab({
   const filtered = useMemo(() => {
     let result = places;
 
-    //Фильтр по типу места
-    if (placeType) {
-      result = result.filter((p) => p.place_type === placeType);
+    // === Фильтр по типам (множественный) ===
+    if (selectedTypes && selectedTypes.length > 0) {
+      result = result.filter((p) => selectedTypes.includes(p.place_type));
     }
 
-    //Поиск по тексту
+    // === Поиск по тексту ===
     if (query.trim()) {
       const q = query.toLowerCase();
       result = result.filter(
@@ -32,7 +32,12 @@ export default function PlacesTab({
     }
 
     return result;
-  }, [places, query, placeType]);
+  }, [places, query, selectedTypes]);
+
+  const headerLabel =
+    selectedTypes && selectedTypes.length > 0
+      ? `Типы: ${selectedTypes.join(', ')}`
+      : 'Акции и места';
 
   return (
     <>
@@ -40,11 +45,8 @@ export default function PlacesTab({
         <Search
           size={16}
           style={{
-            position: 'absolute',
-            left: 12,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: 'var(--text-soft)',
+            position: 'absolute', left: 12, top: '50%',
+            transform: 'translateY(-50%)', color: 'var(--text-soft)',
           }}
         />
         <input
@@ -57,8 +59,7 @@ export default function PlacesTab({
       </div>
 
       <h2 className="section-title">
-        {placeType ? `Тип: ${placeType}` : 'Акции и места'}{' '}
-        <span className="count">{filtered.length}</span>
+        {headerLabel} <span className="count">{filtered.length}</span>
       </h2>
 
       {loading ? (
@@ -74,26 +75,26 @@ export default function PlacesTab({
         ))
       ) : filtered.length === 0 ? (
         <div className="empty">
-          <div className="empty-icon">
-            <Compass size={36} />
-          </div>
-          <h3>{query || placeType ? 'Ничего не найдено' : 'Пока пусто'}</h3>
+          <div className="empty-icon"><Compass size={36} /></div>
+          <h3>{query || selectedTypes?.length ? 'Ничего не найдено' : 'Пока пусто'}</h3>
           <p>
-            {query || placeType
+            {query || selectedTypes?.length
               ? 'Попробуйте изменить фильтр или запрос'
               : 'Для этого города пока нет акций'}
           </p>
         </div>
-      ) : (
-        filtered.map((place) => (
-          <PlaceCard
-            key={place.id}
-            place={place}
-            isFav={favorites.some((f) => f.id === place.id)}
-            onSelect={() => onSelect(place)}
-            onToggleFav={() => onToggleFav(place)}
-          />
-        ))
+          ) : (
+        <div className="places-grid">
+          {filtered.map((place) => (
+            <PlaceCard
+              key={place.id}
+              place={place}
+              isFav={favorites.some((f) => f.id === place.id)}
+              onSelect={() => onSelect(place)}
+              onToggleFav={() => onToggleFav(place)}
+            />
+          ))}
+        </div>
       )}
     </>
   );
