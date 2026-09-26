@@ -1,13 +1,13 @@
 import React from 'react';
 import {
   ArrowLeft, Heart, MapPin, Clock,
-  ExternalLink, Share2,
+  ExternalLink, Share2, Globe,
 } from 'lucide-react';
 import { getPlaceImage } from '../utils/placeImages';
 import PlaceMap from './PlaceMap';
 
 const CATEGORY_EMOJI = {
-  // Категории пользователей (fallback)
+  // Категории пользователей
   'Студенты': '🎓',
   'Пенсионеры': '👵',
   'Участники СВО': '🎖',
@@ -36,25 +36,47 @@ function getEmoji(place) {
   );
 }
 
-export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
+function isMapUrl(url) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return (
+    u.includes('maps') ||
+    u.includes('yandex.ru/maps') ||
+    u.includes('google.com/maps') ||
+    u.includes('2gis')
+  );
+}
+
+export default function PlaceDetail({
+  place, isFav, onToggleFav, onBack, showToast,
+}) {
   const image = getPlaceImage(place);
   const emoji = getEmoji(place);
 
   const handleShare = async () => {
     const text = `${place.title}\n${place.promo_text || ''}\n${place.address || ''}`;
+
+    // 1. Всегда копируем в буфер и показываем тост
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast?.('Скопировано в буфер');
+    } catch {
+      showToast?.('Не удалось скопировать');
+    }
+
+    // 2. Если браузер умеет нативный share — предлагаем и его
     if (navigator.share) {
       try {
         await navigator.share({ title: place.title, text });
-      } catch {}
-    } else {
-      try {
-        await navigator.clipboard.writeText(text);
-        alert('Скопировано');
-      } catch {
-        alert(text);
+      } catch (e) {
+        // пользователь отменил — не проблема, ссылка уже в буфере
       }
     }
   };
+
+  const linkIsMap = isMapUrl(place.map_url);
+  const linkLabel = linkIsMap ? 'Открыть на карте' : 'Перейти на сайт';
+  const LinkIcon = linkIsMap ? MapPin : Globe;
 
   return (
     <div>
@@ -112,9 +134,10 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
         )}
       </div>
 
-      {/* Встроенная карта по адресу из БД */}
+      {/* Встроенная карта по адресу */}
       {place.address && <PlaceMap address={place.address} />}
 
+      {/* Ссылка из БД — на сайт или на карту */}
       {place.map_url && (
         <a
           className="map-link"
@@ -123,7 +146,7 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
           rel="noreferrer"
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MapPin size={18} /> Открыть на карте
+            <LinkIcon size={18} /> {linkLabel}
           </span>
           <ExternalLink size={16} />
         </a>
@@ -150,9 +173,14 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
           fontStyle: 'italic',
           marginTop: 16,
           textAlign: 'center',
+          lineHeight: 1.5,
         }}
       >
-        *Скидки и льготы предоставляются при предъявлении документа
+        *Скидки и льготы предоставляются при предъявлении документа.
+        <br />
+        Информация носит справочный характер и не является публичной офертой (ст. 437 ГК РФ).
+        <br />
+        Уточняйте условия у представителей акций.
       </p>
     </div>
   );
