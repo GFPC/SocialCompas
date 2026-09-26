@@ -30,63 +30,64 @@ export default function FilterSheet({
           </h3>
           <button className="icon-btn" onClick={onClose}>
             <X size={18} />
-          </button>
-        </div>
+                    </button>
+                  </div>
 
-        {selected.length > 0 && (
-          <div
-            style={{
-              fontSize: 12,
-              color: 'var(--text-muted)',
-              marginBottom: 10,
-            }}
+                  {selected.length > 0 && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: 'var(--text-muted)',
+                        marginBottom: 10,
+                      }}
+                    >
+                      Выбрано: {selected.length}
+                    </div>
+                  )}
+
+                  {types.length === 0 && (
+                    <p
+                      style={{
+                        textAlign: 'center',
+                        color: 'var(--text-muted)',
+                        padding: 20,
+                        fontSize: 13,
+                      }}
+                    >
+                      Пока нет доступных типов — сначала загрузите места
+                    </p>
+                  )}
+
+                  {types.map((t) => {
+                    const isSelected = selected.includes(t);
+                    return (
+                      <button
+            key={t}
+            className={`option-btn ${isSelected ? 'selected' : ''}`}
+            style={{ marginBottom: 8 }}
+            onClick={() => onToggle(t)}
           >
-            Выбрано: {selected.length}
-          </div>
-        )}
-
-        {types.length === 0 && (
-          <p
-            style={{
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              padding: 20,
-              fontSize: 13,
-            }}
-          >
-            Пока нет доступных типов — сначала загрузите места
-          </p>
-        )}
-
-        {types.map((t) => {
-          const isSelected = selected.includes(t);
-          return (
-            <button
-              key={t}
-              className={`option-btn ${isSelected ? 'selected' : ''}`}
-              style={{ marginBottom: 8 }}
-              onClick={() => onToggle(t)}
+            <span style={{ flex: 1, paddingRight: 12 }}>{t}</span>
+            <span
+              style={{
+                width: 22,
+                height: 22,
+                minWidth: 22,
+                borderRadius: 6,
+                border: isSelected
+                  ? '2px solid var(--primary)'
+                  : '1.5px solid var(--border)',
+                background: isSelected ? 'var(--primary)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                flexShrink: 0,
+              }}
             >
-              <span>{t}</span>
-              <span
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 6,
-                  border: isSelected
-                    ? '2px solid var(--primary)'
-                    : '1.5px solid var(--border)',
-                  background: isSelected ? 'var(--primary)' : 'transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  flexShrink: 0,
-                }}
-              >
-                {isSelected && <Check size={14} strokeWidth={3} />}
-              </span>
-            </button>
+              {isSelected && <Check size={14} strokeWidth={3} />}
+            </span>
+          </button>
           );
         })}
 
