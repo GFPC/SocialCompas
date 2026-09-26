@@ -1,7 +1,13 @@
 import React from 'react';
-import { X, Check, SlidersHorizontal } from 'lucide-react';
+import { X, Check, SlidersHorizontal, RotateCcw } from 'lucide-react';
 
-export default function FilterSheet({ types, selected, onSelect, onClose }) {
+export default function FilterSheet({
+  types,
+  selected,       // массив выбранных типов
+  onToggle,       // (type) => void
+  onClear,        // () => void
+  onClose,
+}) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
@@ -27,14 +33,17 @@ export default function FilterSheet({ types, selected, onSelect, onClose }) {
           </button>
         </div>
 
-        <button
-          className={`option-btn ${!selected ? 'selected' : ''}`}
-          style={{ marginBottom: 8 }}
-          onClick={() => onSelect(null)}
-        >
-          <span>Все типы</span>
-          {!selected && <Check size={18} />}
-        </button>
+        {selected.length > 0 && (
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              marginBottom: 10,
+            }}
+          >
+            Выбрано: {selected.length}
+          </div>
+        )}
 
         {types.length === 0 && (
           <p
@@ -49,17 +58,54 @@ export default function FilterSheet({ types, selected, onSelect, onClose }) {
           </p>
         )}
 
-        {types.map((t) => (
+        {types.map((t) => {
+          const isSelected = selected.includes(t);
+          return (
+            <button
+              key={t}
+              className={`option-btn ${isSelected ? 'selected' : ''}`}
+              style={{ marginBottom: 8 }}
+              onClick={() => onToggle(t)}
+            >
+              <span>{t}</span>
+              <span
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  border: isSelected
+                    ? '2px solid var(--primary)'
+                    : '1.5px solid var(--border)',
+                  background: isSelected ? 'var(--primary)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  flexShrink: 0,
+                }}
+              >
+                {isSelected && <Check size={14} strokeWidth={3} />}
+              </span>
+            </button>
+          );
+        })}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button
-            key={t}
-            className={`option-btn ${selected === t ? 'selected' : ''}`}
-            style={{ marginBottom: 8 }}
-            onClick={() => onSelect(t)}
+            className="btn btn-ghost"
+            onClick={onClear}
+            disabled={selected.length === 0}
+            style={{
+              flex: 1,
+              opacity: selected.length === 0 ? 0.5 : 1,
+            }}
           >
-            <span>{t}</span>
-            {selected === t && <Check size={18} />}
+            <RotateCcw size={16} /> Сбросить
           </button>
-        ))}
+          <button className="btn btn-primary" onClick={onClose} style={{ flex: 1 }}>
+            Готово
+          </button>
+        </div>
       </div>
     </div>
   );

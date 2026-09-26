@@ -1,77 +1,13 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'https://api.socialcompass.ru';
 
 
-// МОК-ДАННЫЕ (только для разработки UI)
-// Удалить, когда бэкенд зальёт реальные места в БД.
-
-const MOCK_PLACES = [
-  {
-    id: 1,
-    title: 'Аполло. День студента',
-    place_type: 'Боулинг',
-    category: 'Студенты',
-    promo_text: 'Забудьте о парах и экзаменах хотя бы ненадолго! Хватайте друзей и мититесь в боулинг с нашей крутой акцией: каждый будний день с 12:00 до 16:00 — всего за 300₽.',
-    address: 'ул. Пермитина, 24, этаж 2',
-    schedule: 'Пн–Пт 12:00–16:00',
-    map_url: 'https://yandex.ru/maps/',
-  },
-  {
-    id: 2,
-    title: 'СинеМА Парк. Студенты скидка 20%',
-    place_type: 'Кинотеатр',
-    category: 'Студенты',
-    promo_text: 'Предложение для всех на каждый день: -50% детям, -30% пенсионерам, -20% учащимся.',
-    address: 'Красный проспект, 101',
-    schedule: 'Ежедневно 10:00–23:00',
-    map_url: 'https://yandex.ru/maps/',
-  },
-  {
-    id: 3,
-    title: 'Играй студент в бильярд SkyCity со скидкой 50%',
-    place_type: 'Бильярд',
-    category: 'Студенты',
-    promo_text: 'Скидка 50% на все столы по студенческому билету.',
-    address: 'ул. Ленина, 12',
-    schedule: 'Ежедневно 12:00–02:00',
-    map_url: 'https://yandex.ru/maps/',
-  },
-  {
-    id: 4,
-    title: 'Кофейня «Точка» — кофе за 99₽',
-    place_type: 'Кафе',
-    category: 'Студенты',
-    promo_text: 'Любой кофе навынос за 99₽ по студенческому.',
-    address: 'ул. Пирогова, 8',
-    schedule: 'Пн–Пт 8:00–22:00',
-  },
-  {
-    id: 5,
-    title: 'Бассейн «Нептун» — скидка 40%',
-    place_type: 'Спорт',
-    category: 'Студенты',
-    promo_text: 'Посещение бассейна со скидкой 40% для студентов.',
-    address: 'ул. Спортивная, 5',
-    schedule: 'Ежедневно 7:00–23:00',
-  },
-];
-
-
 export async function fetchPlaces(city, category) {
-  try {
-    const params = new URLSearchParams({ city, category });
-    const res = await fetch(`${API_BASE}/api/v1/places?${params}`);
-    if (!res.ok) throw new Error('Ошибка загрузки списка мест');
-    const data = await res.json();
-
-    if (!data.items || data.items.length === 0) {
-      console.warn('[fetchPlaces] API пуст, отдаю мок-данные');
-      return { items: MOCK_PLACES };
-    }
-    return data;
-  } catch (e) {
-    console.warn('[fetchPlaces] Ошибка API, отдаю мок-данные', e);
-    return { items: MOCK_PLACES };
-  }
+  const params = new URLSearchParams({ city, category });
+  const res = await fetch(`${API_BASE}/api/v1/places?${params}`);
+  if (!res.ok) throw new Error('Ошибка загрузки списка мест');
+  const data = await res.json();
+  console.log('[fetchPlaces]', city, category, '→', data.count, 'мест');
+  return data;
 }
 
 export async function fetchPlaceDetail(placeId) {
