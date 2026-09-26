@@ -24,6 +24,8 @@ env/
 # Logs
 *.log
 
-# OS generated
-.DS_Store
-Thumbs.db
+# Local Scratch & Scraper Tools
+scripts/discount_scraper.py
+scripts/scraped_discounts.json
+scripts/run_check.py
+scripts/check_db.py
