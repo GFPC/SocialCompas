@@ -144,6 +144,17 @@ def run_api_tests():
     assert "message" in chat_data
     print("[OK] API Step 10: POST /api/v1/chat AI Tunnel response passed")
 
+    # 11. Test AI Chat strict guardrails (Off-topic refusal)
+    res = client.post("/api/v1/chat", json={
+        "messages": [{"role": "user", "content": "Напиши мне код на Python для парсинга сайтов"}],
+        "city": "Москва",
+        "category": "Студенты"
+    })
+    assert res.status_code == 200, res.text
+    refusal_msg = res.json().get("message", "")
+    assert "только на вопросы о скидках" in refusal_msg or "SocialCompass" in refusal_msg
+    print("[OK] API Step 11: AI Guardrail off-topic prompt refusal passed")
+
 
 if __name__ == "__main__":
     asyncio.run(run_bot_tests())
