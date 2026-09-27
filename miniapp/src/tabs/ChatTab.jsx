@@ -1,40 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, Bot, User } from 'lucide-react';
+import { sendChatMessage } from '../api';
 
 const SUGGESTIONS = [
   'Куда сходить со студенческим?',
   'Есть ли скидки в музеи?',
-  'Где поиграть в бильярд?',
-  'Что бесплатно для студентов?',
+  'Где в городе аквапарк?',
+  'Что бесплатно для льготников?',
 ];
 
-// Заглушка ИИ. Когда будет реальный API, надо будет поменять
-function mockAIResponse(userText) {
-  const t = userText.toLowerCase();
-  if (t.includes('бильярд')) {
-    return 'По бильярду советую «Фабрика на ткацкой» — скидка 40% на игру. Адрес: ул. Ткацкая, д. 5, стр. 7. Работают Пн–чт с 12:00 до 18:00.';
-  }
-  if (t.includes('музей') || t.includes('музеи')) {
-    return 'В Москве для студентов есть скидки в Музей Маяковского (200 ₽) и Третьяковскую галерею (400 ₽). Оба работают в будни и выходные.';
-  }
-  if (t.includes('бесплат') || t.includes('бесплатн')) {
-    return 'Бесплатный вход для студентов с московской регистрацией — в Московский зоопарк. Остальным — каждую третью среду месяца.';
-  }
-  if (t.includes('боулинг')) {
-    return 'Боулинг со скидкой 50% — клуб «Самокат» на ул. Самокатной, д. 2к1. По будням с 12:00 до 18:00.';
-  }
-  if (t.includes('аквапарк')) {
-    return 'Советую два аквапарка: «Мореон» (2350 ₽ по будням) и «Фэнтази» (скидка 30% в будни). Оба подходят для студентов.';
-  }
-  return 'Пока я только учусь, но могу подсказать места со скидками для студентов в Москве. Спросите про бильярд, музеи, аквапарки или боулинг — расскажу, где выгоднее.';
-}
-
-export default function ChatTab() {
+export default function ChatTab({ city = 'Москва', category = 'Студенты' }) {
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       role: 'ai',
-      text: 'Привет! Я помогу найти скидки и интересные места для студентов. Что вас интересует?',
+      text: `Привет! Я ИИ-ассистент SocialCompass. Подскажу акции и места в г. ${city} для категории «${category}». О чём хотите узнать?`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -47,29 +27,40 @@ export default function ChatTab() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  const handleSend = (text) => {
+  const handleSend = async (text) => {
     const userText = text.trim();
-    if (!userText) return;
+    if (!userText || typing) return;
 
     const userMsg = {
       id: 'u_' + Date.now(),
       role: 'user',
       text: userText,
     };
-    setMessages((prev) => [...prev, userMsg]);
+
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput('');
     setTyping(true);
 
-    // Имитация задержки ответа ИИ
-    setTimeout(() => {
+    try {
+      const aiReplyText = await sendChatMessage(newMessages, city, category);
       const aiMsg = {
         id: 'a_' + Date.now(),
         role: 'ai',
-        text: mockAIResponse(userText),
+        text: aiReplyText,
       };
       setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.error('[ChatTab] Error:', err);
+      const errorMsg = {
+        id: 'err_' + Date.now(),
+        role: 'ai',
+        text: err.message || 'Произошла ошибка при обращении к ИИ. Попробуйте ещё раз позже.',
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
       setTyping(false);
-    }, 900);
+    }
   };
 
   const handleKeyDown = (e) => {

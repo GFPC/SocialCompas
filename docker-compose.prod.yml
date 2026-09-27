@@ -20,6 +20,10 @@ services:
       - MYSQL_USER=bot_user
       - MYSQL_PASSWORD=bot_password
       - MYSQL_DB=socialcompas_db
+      - AITUNNEL_API_KEY=${AITUNNEL_API_KEY:-YOUR_AITUNNEL_API_KEY_HERE}
+      - AITUNNEL_BASE_URL=https://api.aitunnel.ru/v1
+      - AI_MODEL=gpt-4o-mini
+      - CHAT_RATE_LIMIT_PER_MINUTE=10
     depends_on:
       mysql:
         condition: service_healthy

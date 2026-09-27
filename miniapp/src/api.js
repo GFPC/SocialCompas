@@ -75,6 +75,34 @@ export async function saveProfile(userId, city, category) {
   }
 }
 
+// ИИ Чат (AI Tunnel API)
+export async function sendChatMessage(messages, city = 'Москва', category = 'Студенты') {
+  const formattedMessages = messages.map((m) => ({
+    role: m.role === 'ai' ? 'assistant' : m.role,
+    content: m.text || m.content,
+  }));
+
+  const res = await fetch(`${API_BASE}/api/v1/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: formattedMessages,
+      city,
+      category,
+    }),
+  });
+
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error('Превышен лимит запросов к ИИ (10 в минуту). Подождите немного.');
+    }
+    throw new Error('Ошибка взаимодействия с ИИ-сервисом');
+  }
+
+  const data = await res.json();
+  return data.message;
+}
+
 const LISTS_KEY = (userId) => `sc_lists_${userId}`;
 
 function readLists(userId) {

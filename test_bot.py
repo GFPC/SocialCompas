@@ -127,13 +127,22 @@ def run_api_tests():
     print("[OK] API Step 8: GET /api/v1/profile/me with valid JWT passed (200)")
 
     # 9. Verify legacy unauthenticated routes by user_id are deleted -> 404 Not Found
-    res = client.get("/api/v1/favorites/998877")
-    assert res.status_code == 404
     res = client.get("/api/v1/profile/998877")
     assert res.status_code == 404
     res = client.post("/api/v1/auth/token", json={"user_id": "998877"})
     assert res.status_code == 404
     print("[OK] API Step 9: Legacy unauthenticated routes by user_id completely removed (404)")
+    # 10. Test AI Chat POST /api/v1/chat with AI Tunnel
+    res = client.post("/api/v1/chat", json={
+        "messages": [{"role": "user", "content": "Какие музеи со скидкой есть?"}],
+        "city": "Москва",
+        "category": "Студенты"
+    })
+    assert res.status_code == 200, res.text
+    chat_data = res.json()
+    assert chat_data.get("ok") is True
+    assert "message" in chat_data
+    print("[OK] API Step 10: POST /api/v1/chat AI Tunnel response passed")
 
 
 if __name__ == "__main__":

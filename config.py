@@ -29,3 +29,10 @@ MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3307"))
 MYSQL_USER = os.getenv("MYSQL_USER", "bot_user")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "bot_password")
 MYSQL_DB = os.getenv("MYSQL_DB", "socialcompas_db")
+
+# AI Tunnel Configuration
+AITUNNEL_API_KEY = os.getenv("AITUNNEL_API_KEY", "YOUR_AITUNNEL_API_KEY_HERE")
+AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1")
+AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
+CHAT_RATE_LIMIT_PER_MINUTE = int(os.getenv("CHAT_RATE_LIMIT_PER_MINUTE", "10"))
+

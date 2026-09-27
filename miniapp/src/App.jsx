@@ -189,7 +189,7 @@ export default function App() {
                 onRemove={handleRemoveFavorite}
               />
             )}
-            {activeTab === 'chat' && <ChatTab />}
+            {activeTab === 'chat' && <ChatTab city={city} category={category} />}
             {activeTab === 'profile' && (
               <ProfileTab
                 city={city}
