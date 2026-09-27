@@ -13,7 +13,6 @@ export default function TopBar({ city, selectedTypes, onFilterClick, onClearFilt
 
   return (
     <div className="top-bar">
-      {/* Город — просто отображение */}
       <div className="pill pill-static">
         <div style={{ textAlign: 'left', minWidth: 0 }}>
           <span className="pill-label">Ваш город</span>

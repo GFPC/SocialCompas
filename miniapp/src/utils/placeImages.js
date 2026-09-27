@@ -16,10 +16,8 @@ const IMAGE_MAP = {
 };
 
 export function getPlaceImage(place) {
-  // Если бэкенд когда-нибудь пришлёт image_url — используем его
   if (place.image_url) return place.image_url;
 
-  // Иначе — картинка по типу места
   if (place.place_type && IMAGE_MAP[place.place_type]) {
     return IMAGE_MAP[place.place_type];
   }

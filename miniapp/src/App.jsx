@@ -30,7 +30,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
 
-  // Множественный фильтр по типам
+  // Фильтр
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -55,7 +55,6 @@ export default function App() {
       loadPlaces();
       loadFavorites();
     }
-    // eslint-disable-next-line
   }, [city, category, isSurveyDone]);
 
   useEffect(() => {
@@ -67,7 +66,6 @@ export default function App() {
         }
       }).catch(() => {});
     }
-    // eslint-disable-next-line
   }, []);
 
   const loadPlaces = async () => {
@@ -105,7 +103,7 @@ export default function App() {
     }
     if (isFav) {
       setFavorites((prev) => prev.filter((f) => f.id !== place.id));
-      showToast('Убрано из избранного');
+      showToast('Удаленно');
     } else {
       setFavorites((prev) => [...prev, place]);
       showToast('Добавлено в избранное');
@@ -131,7 +129,7 @@ export default function App() {
     }
   };
 
-  // === Фильтр ===
+  // Фильтр
   const toggleType = (type) => {
     setSelectedTypes((prev) =>
       prev.includes(type)

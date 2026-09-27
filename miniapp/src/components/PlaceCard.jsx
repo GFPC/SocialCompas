@@ -3,7 +3,7 @@ import { Heart, MapPin, Trash2 } from 'lucide-react';
 import { getPlaceImage } from '../utils/placeImages';
 
 const CATEGORY_EMOJI = {
-  // Категории пользователей (fallback)
+  // Категории пользователей
   'Студенты': '🎓',
   'Пенсионеры': '👵',
   'Участники СВО': '🎖',

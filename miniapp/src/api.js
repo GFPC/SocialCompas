@@ -17,7 +17,6 @@ export async function fetchPlaceDetail(placeId) {
 }
 
 // избранное
-
 export async function fetchFavorites(userId) {
   try {
     const res = await fetch(`${API_BASE}/api/v1/favorites/${userId}`);
@@ -75,8 +74,6 @@ export async function saveProfile(userId, city, category) {
     return null;
   }
 }
-
-// Временно, пока нет реальных данных!!!
 
 const LISTS_KEY = (userId) => `sc_lists_${userId}`;
 

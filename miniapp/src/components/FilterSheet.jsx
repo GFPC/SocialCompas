@@ -3,9 +3,9 @@ import { X, Check, SlidersHorizontal, RotateCcw } from 'lucide-react';
 
 export default function FilterSheet({
   types,
-  selected,       // массив выбранных типов
-  onToggle,       // (type) => void
-  onClear,        // () => void
+  selected,      
+  onToggle,      
+  onClear,       
   onClose,
 }) {
   return (
@@ -54,7 +54,7 @@ export default function FilterSheet({
                         fontSize: 13,
                       }}
                     >
-                      Пока нет доступных типов — сначала загрузите места
+                      Пока нет доступных мест :С
                     </p>
                   )}
 

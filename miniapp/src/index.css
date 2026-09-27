@@ -1,7 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* цвета по макс */
+  /* цвета */
   --primary: #3b0333;
   --primary-dark: #350329;
   --primary-light: #f4b3ec;
@@ -392,7 +392,6 @@ button { cursor: pointer; }
   box-shadow: var(--shadow-sm);
 }
 
-/* Survey */
 .survey-shell {
   max-width: 480px;
   margin: 0 auto;
@@ -470,7 +469,6 @@ button { cursor: pointer; }
 }
 .survey-actions .btn { flex: 1; }
 
-/* Skeleton */
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
@@ -487,7 +485,6 @@ button { cursor: pointer; }
 .sk-w60 { width: 60%; }
 .sk-w80 { width: 80%; }
 
-/* Empty */
 .empty {
   text-align: center;
   padding: 50px 24px;
@@ -543,7 +540,6 @@ button { cursor: pointer; }
   margin-bottom: 14px;
 }
 
-/* Toast */
 .toast-wrap {
   position: fixed;
   bottom: 100px;
@@ -569,7 +565,6 @@ button { cursor: pointer; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -640,8 +635,8 @@ button { cursor: pointer; }
 .chat-wrap {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px - 80px); /* top-bar + bottom-nav */
-  margin: -14px -16px -100px;         /* растянуть на всю ширину контента */
+  height: calc(100vh - 64px - 80px);
+  margin: -14px -16px -100px;
 }
 
 .chat-messages {
@@ -724,7 +719,6 @@ button { cursor: pointer; }
   30%           { transform: translateY(-4px); opacity: 1; }
 }
 
-/* suggestions */
 .chat-suggestions {
   padding: 8px 16px 12px;
   background: var(--bg);
@@ -760,7 +754,6 @@ button { cursor: pointer; }
   background: var(--primary-soft);
 }
 
-/* input */
 .chat-input-row {
   display: flex;
   gap: 8px;
@@ -807,12 +800,10 @@ button { cursor: pointer; }
   cursor: not-allowed;
 }
 
-/* 
-   АДАПТИВ ДЛЯ ПЛАНШЕТА И ПК
-/*  Планшет: от 768px */
+/* Адаптив под пк и планшет */
 @media (min-width: 768px) {
   body {
-    background: #000000; /* фон вокруг приложения */
+    background: #000000; 
   }
 
   .app-container {
@@ -834,7 +825,7 @@ button { cursor: pointer; }
     padding: 20px 24px 120px;
   }
 
-  /* Карточки — в 2 колонки */
+  /* Карточки в 2 колонки */
   .places-grid,
   .favorites-grid {
     display: grid;
@@ -846,7 +837,6 @@ button { cursor: pointer; }
     margin-bottom: 0;
   }
 
-  /* Bottom-nav — центрирован и с закруглением */
   .bottom-nav {
     max-width: 480px;
     bottom: 24px;
@@ -855,7 +845,6 @@ button { cursor: pointer; }
     box-shadow: 0 8px 32px rgba(11, 18, 32, 0.12);
   }
 
-  /* Модалки — по центру экрана, а не снизу */
   .modal-overlay {
     align-items: center;
   }
@@ -873,7 +862,6 @@ button { cursor: pointer; }
   .modal-handle { display: none; }
 }
 
-/*  ПК: от 1100px */
 @media (min-width: 1100px) {
   .app-container {
     max-width: 1100px;
@@ -883,19 +871,16 @@ button { cursor: pointer; }
     padding: 24px 32px 140px;
   }
 
-  /* Карточки — в 3 колонки */
   .places-grid,
   .favorites-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  /* Крупнее поиск */
   .search-wrap .input {
     padding: 14px 16px 14px 42px;
     font-size: 15px;
   }
 
-  /* Детальный экран — 2 колонки */
   .detail-hero {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -915,7 +900,6 @@ button { cursor: pointer; }
     font-size: 26px;
   }
 
-  /* Промо и инфо — тоже шире */
   .promo-banner {
     padding: 20px 24px;
   }
@@ -923,7 +907,6 @@ button { cursor: pointer; }
     font-size: 16px;
   }
 
-   /* Чат — на всю ширину контейнера, пузыри по центру */
   .chat-wrap {
     max-width: none;
     margin: -24px -32px -140px;
@@ -949,7 +932,6 @@ button { cursor: pointer; }
     font-size: 15px;
   }
 }
-  /*  Очень широкие экраны: от 1400px  */
   @media (min-width: 1400px) {
     .app-container {
       max-width: 1280px;

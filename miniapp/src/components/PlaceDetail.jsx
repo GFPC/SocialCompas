@@ -56,7 +56,6 @@ export default function PlaceDetail({
   const handleShare = async () => {
     const text = `${place.title}\n${place.promo_text || ''}\n${place.address || ''}`;
 
-    // 1. Всегда копируем в буфер и показываем тост
     try {
       await navigator.clipboard.writeText(text);
       showToast?.('Скопировано в буфер');
@@ -64,12 +63,10 @@ export default function PlaceDetail({
       showToast?.('Не удалось скопировать');
     }
 
-    // 2. Если браузер умеет нативный share — предлагаем и его
     if (navigator.share) {
       try {
         await navigator.share({ title: place.title, text });
       } catch (e) {
-        // пользователь отменил — не проблема, ссылка уже в буфере
       }
     }
   };
@@ -137,7 +134,7 @@ export default function PlaceDetail({
       {/* Встроенная карта по адресу */}
       {place.address && <PlaceMap address={place.address} />}
 
-      {/* Ссылка из БД — на сайт или на карту */}
+      {/* Ссылка на сайт или на карту */}
       {place.map_url && (
         <a
           className="map-link"

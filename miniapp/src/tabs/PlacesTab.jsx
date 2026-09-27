@@ -15,12 +15,12 @@ export default function PlacesTab({
   const filtered = useMemo(() => {
     let result = places;
 
-    // === Фильтр по типам (множественный) ===
+    // Фильтр
     if (selectedTypes && selectedTypes.length > 0) {
       result = result.filter((p) => selectedTypes.includes(p.place_type));
     }
 
-    // === Поиск по тексту ===
+    // Поиск по тексту
     if (query.trim()) {
       const q = query.toLowerCase();
       result = result.filter(

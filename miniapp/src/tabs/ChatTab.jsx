@@ -8,7 +8,7 @@ const SUGGESTIONS = [
   'Что бесплатно для студентов?',
 ];
 
-// === Заглушка ИИ. Когда будет реальный API — заменим на fetch ===
+// Заглушка ИИ. Когда будет реальный API, надо будет поменять
 function mockAIResponse(userText) {
   const t = userText.toLowerCase();
   if (t.includes('бильярд')) {
