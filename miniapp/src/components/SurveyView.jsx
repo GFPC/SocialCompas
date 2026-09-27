@@ -17,7 +17,7 @@ export default function SurveyView({ onComplete, initialCity, initialCategory, i
             <div className="survey-logo"><Compass size={34} /></div>
             <h2 className="survey-title">Социальный Компас</h2>
             <p className="survey-subtitle">
-              Найдём интересные места в вашем городе
+              Найдём интересные места в вашем городе! 
             </p>
           </>
         )}

@@ -1,35 +1,79 @@
 import React from 'react';
 import {
   ArrowLeft, Heart, MapPin, Clock,
-  ExternalLink, Share2,
+  ExternalLink, Share2, Globe,
 } from 'lucide-react';
+import { getPlaceImage } from '../utils/placeImages';
+import PlaceMap from './PlaceMap';
 
 const CATEGORY_EMOJI = {
+  // Категории пользователей
   'Студенты': '🎓',
   'Пенсионеры': '👵',
   'Участники СВО': '🎖',
+
+  // Типы мест
+  'Аквапарк': '🏊',
+  'Музей': '🏛️',
+  'Бильярдный клуб': '🎱',
+  'Боулинг клуб': '🎳',
+  'Боулинг центр': '🎳',
+  'Зоопарк': '🦁',
+  'Кинотеатр': '🎬',
+  'Термальный комплекс': '♨️',
+  'Котокафе': '🐱',
+  'Кафе': '☕',
+  'Спорт': '🏋️',
+
   default: '📍',
 };
 
-export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
-  const emoji =
-    CATEGORY_EMOJI[place.category] ||
+function getEmoji(place) {
+  return (
     CATEGORY_EMOJI[place.place_type] ||
-    CATEGORY_EMOJI.default;
+    CATEGORY_EMOJI[place.category] ||
+    CATEGORY_EMOJI.default
+  );
+}
+
+function isMapUrl(url) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return (
+    u.includes('maps') ||
+    u.includes('yandex.ru/maps') ||
+    u.includes('google.com/maps') ||
+    u.includes('2gis')
+  );
+}
+
+export default function PlaceDetail({
+  place, isFav, onToggleFav, onBack, showToast,
+}) {
+  const image = getPlaceImage(place);
+  const emoji = getEmoji(place);
 
   const handleShare = async () => {
     const text = `${place.title}\n${place.promo_text || ''}\n${place.address || ''}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast?.('Скопировано в буфер');
+    } catch {
+      showToast?.('Не удалось скопировать');
+    }
+
     if (navigator.share) {
-      try { await navigator.share({ title: place.title, text }); } catch {}
-    } else {
       try {
-        await navigator.clipboard.writeText(text);
-        alert('Скопировано');
-      } catch {
-        alert(text);
+        await navigator.share({ title: place.title, text });
+      } catch (e) {
       }
     }
   };
+
+  const linkIsMap = isMapUrl(place.map_url);
+  const linkLabel = linkIsMap ? 'Открыть на карте' : 'Перейти на сайт';
+  const LinkIcon = linkIsMap ? MapPin : Globe;
 
   return (
     <div>
@@ -39,10 +83,12 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
 
       <div className="detail-hero">
         <div className="place-banner">
-          {place.image_url ? (
-            <img src={place.image_url} alt={place.title} />
+          {image ? (
+            <img src={image} alt={place.title} />
           ) : (
-            <span className="banner-emoji" style={{ fontSize: 72 }}>{emoji}</span>
+            <span className="banner-emoji" style={{ fontSize: 72 }}>
+              {emoji}
+            </span>
           )}
           {place.place_type && <span className="banner-tag">{place.place_type}</span>}
         </div>
@@ -62,7 +108,9 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
       <div className="profile-card" style={{ padding: '4px 16px' }}>
         {place.schedule && (
           <div className="info-row">
-            <div className="icon-wrap"><Clock size={18} /></div>
+            <div className="icon-wrap">
+              <Clock size={18} />
+            </div>
             <div>
               <span className="label">Время работы</span>
               <span className="value">{place.schedule}</span>
@@ -72,7 +120,9 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
 
         {place.address && (
           <div className="info-row">
-            <div className="icon-wrap"><MapPin size={18} /></div>
+            <div className="icon-wrap">
+              <MapPin size={18} />
+            </div>
             <div>
               <span className="label">Как добраться?</span>
               <span className="value">{place.address}</span>
@@ -81,10 +131,19 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
         )}
       </div>
 
+      {/* Встроенная карта по адресу */}
+      {place.address && <PlaceMap address={place.address} />}
+
+      {/* Ссылка на сайт или на карту */}
       {place.map_url && (
-        <a className="map-link" href={place.map_url} target="_blank" rel="noreferrer">
+        <a
+          className="map-link"
+          href={place.map_url}
+          target="_blank"
+          rel="noreferrer"
+        >
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MapPin size={18} /> Открыть на карте
+            <LinkIcon size={18} /> {linkLabel}
           </span>
           <ExternalLink size={16} />
         </a>
@@ -104,14 +163,21 @@ export default function PlaceDetail({ place, isFav, onToggleFav, onBack }) {
         </button>
       </div>
 
-      <p style={{
-        fontSize: 12,
-        color: 'var(--text-soft)',
-        fontStyle: 'italic',
-        marginTop: 16,
-        textAlign: 'center',
-      }}>
-        *Скидки и льготы предоставляются при предъявлении документа
+      <p
+        style={{
+          fontSize: 12,
+          color: 'var(--text-soft)',
+          fontStyle: 'italic',
+          marginTop: 16,
+          textAlign: 'center',
+          lineHeight: 1.5,
+        }}
+      >
+        *Скидки и льготы предоставляются при предъявлении документа.
+        <br />
+        Информация носит справочный характер и не является публичной офертой (ст. 437 ГК РФ).
+        <br />
+        Уточняйте условия у представителей акций.
       </p>
     </div>
   );

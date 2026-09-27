@@ -12,6 +12,7 @@ import PlaceDetail from './components/PlaceDetail';
 import FilterSheet from './components/FilterSheet';
 
 import PlacesTab from './tabs/PlacesTab';
+import ChatTab from './tabs/ChatTab';
 import FavoritesTab from './tabs/FavoritesTab';
 import ProfileTab from './tabs/ProfileTab';
 
@@ -29,7 +30,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
 
-  const [placeType, setPlaceType] = useState(null);
+  // Фильтр
+  const [selectedTypes, setSelectedTypes] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [toasts, setToasts] = useState([]);
@@ -53,7 +55,6 @@ export default function App() {
       loadPlaces();
       loadFavorites();
     }
-    // eslint-disable-next-line
   }, [city, category, isSurveyDone]);
 
   useEffect(() => {
@@ -65,7 +66,6 @@ export default function App() {
         }
       }).catch(() => {});
     }
-    // eslint-disable-next-line
   }, []);
 
   const loadPlaces = async () => {
@@ -101,10 +101,9 @@ export default function App() {
     } catch (e) {
       console.warn('API ошибка, обновляю локально', e);
     }
-    // Обновляем UI в любом случае
     if (isFav) {
       setFavorites((prev) => prev.filter((f) => f.id !== place.id));
-      showToast('Убрано из избранного');
+      showToast('Удаленно');
     } else {
       setFavorites((prev) => [...prev, place]);
       showToast('Добавлено в избранное');
@@ -116,7 +115,7 @@ export default function App() {
   const handleFinishSurvey = async (newCity, newCategory) => {
     setCity(newCity);
     setCategory(newCategory);
-    setPlaceType(null);
+    setSelectedTypes([]);
     localStorage.setItem('sc_city', newCity);
     localStorage.setItem('sc_category', newCategory);
     localStorage.setItem('sc_survey_done', 'true');
@@ -129,6 +128,17 @@ export default function App() {
       console.error(e);
     }
   };
+
+  // Фильтр
+  const toggleType = (type) => {
+    setSelectedTypes((prev) =>
+      prev.includes(type)
+        ? prev.filter((t) => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  const clearTypes = () => setSelectedTypes([]);
 
   if (!isSurveyDone || isEditMode) {
     return (
@@ -145,9 +155,9 @@ export default function App() {
     <div className="app-container">
       <TopBar
         city={city}
-        placeType={placeType}
+        selectedTypes={selectedTypes}
         onFilterClick={() => setFilterOpen(true)}
-        onClearFilter={() => setPlaceType(null)}
+        onClearFilter={clearTypes}
       />
 
       <main className="content">
@@ -165,7 +175,7 @@ export default function App() {
                 places={places}
                 loading={loading}
                 favorites={favorites}
-                placeType={placeType}
+                selectedTypes={selectedTypes}
                 onSelect={setSelectedPlace}
                 onToggleFav={handleToggleFavorite}
               />
@@ -173,12 +183,13 @@ export default function App() {
             {activeTab === 'favorites' && (
               <FavoritesTab
                 favorites={favorites}
-                placeType={placeType}
+                selectedTypes={selectedTypes}
                 onSelect={setSelectedPlace}
                 onToggleFav={handleToggleFavorite}
                 onRemove={handleRemoveFavorite}
               />
             )}
+            {activeTab === 'chat' && <ChatTab />}
             {activeTab === 'profile' && (
               <ProfileTab
                 city={city}
@@ -199,8 +210,9 @@ export default function App() {
       {filterOpen && (
         <FilterSheet
           types={placeTypes}
-          selected={placeType}
-          onSelect={(t) => { setPlaceType(t); setFilterOpen(false); }}
+          selected={selectedTypes}
+          onToggle={toggleType}
+          onClear={clearTypes}
           onClose={() => setFilterOpen(false)}
         />
       )}
