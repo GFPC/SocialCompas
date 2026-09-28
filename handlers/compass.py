@@ -40,15 +40,13 @@ def get_main_menu_keyboard() -> List[List[Dict[str, str]]]:
     return [
         [{"text": "📍 Список мест и акций", "callback_data": "view_places"}],
         [{"text": "⭐ Избранное", "callback_data": "view_favorites"}],
-        [{"text": "📱 Открыть MiniApp & Интерактивную карту", "url": "https://socialcompass.ru"}],
-        [{"text": "⚙️ Настройки", "callback_data": "view_settings"}],
+        [{"text": "⚙️ Настройки профиля", "callback_data": "view_settings"}],
     ]
 
 
 def get_settings_keyboard() -> List[List[Dict[str, str]]]:
     return [
         [{"text": "✏️ Изменить данные", "callback_data": "edit_profile"}],
-        [{"text": "📱 Открыть MiniApp", "url": "https://socialcompass.ru"}],
         [{"text": "🏠 В главное меню", "callback_data": "menu_main"}],
     ]
 
@@ -59,7 +57,6 @@ def get_places_list_keyboard(places: List[Dict[str, Any]]) -> List[List[Dict[str
         title = place.get("title", "Место")
         place_type = f" ({place['place_type']})" if place.get("place_type") else ""
         keyboard.append([{"text": f"🏛 {title}{place_type}", "callback_data": f"place_{place['id']}"}])
-    keyboard.append([{"text": "🗺 Открыть все на карте", "url": "https://socialcompass.ru"}])
     keyboard.append([{"text": "🏠 В главное меню", "callback_data": "menu_main"}])
     return keyboard
 
@@ -210,7 +207,6 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
         lat = place.get("lat") if place else None
         lng = place.get("lng") if place else None
         return msg, get_place_detail_keyboard(place_id, False, map_url, lat, lng)
-        return msg, get_place_detail_keyboard(place_id, False, place.get("map_url", "") if place else "")
 
     # 7. View Favorites List
     if data == "view_favorites":

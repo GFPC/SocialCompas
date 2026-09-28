@@ -73,22 +73,23 @@ export default function PlaceCard({
         </button>
 
         <div className="actions">
-          {onDelete && (
+          {onDelete ? (
             <button
               className="icon-btn danger"
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              title="Удалить"
+              title="Удалить из избранного"
             >
               <Trash2 size={18} />
             </button>
+          ) : (
+            <button
+              className={`icon-btn ${isFav ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+              title={isFav ? 'Убрать из избранного' : 'В избранное'}
+            >
+              <Heart size={20} fill={isFav ? 'currentColor' : 'none'} />
+            </button>
           )}
-          <button
-            className={`icon-btn ${isFav ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-            title={isFav ? 'Убрать из избранного' : 'В избранное'}
-          >
-            <Heart size={20} fill={isFav ? 'currentColor' : 'none'} />
-          </button>
         </div>
       </div>
     </article>

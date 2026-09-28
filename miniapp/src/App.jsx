@@ -16,7 +16,19 @@ import ChatTab from './tabs/ChatTab';
 import FavoritesTab from './tabs/FavoritesTab';
 import ProfileTab from './tabs/ProfileTab';
 
-const USER_ID = 'miniapp_user_1';
+const getUserId = () => {
+  try {
+    const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (tgId) return String(tgId);
+    const maxId = window.MaxWebApp?.user?.id;
+    if (maxId) return String(maxId);
+    const urlId = new URLSearchParams(window.location.search).get('user_id');
+    if (urlId) return urlId;
+  } catch {}
+  return localStorage.getItem('sc_user_id') || 'miniapp_user_1';
+};
+
+const USER_ID = getUserId();
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('places');
