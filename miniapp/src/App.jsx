@@ -70,14 +70,16 @@ export default function App() {
   }, [city, category, isSurveyDone]);
 
   useEffect(() => {
-    if (isSurveyDone) {
-      fetchProfile(USER_ID).then((p) => {
-        if (p?.city && p?.category) {
-          setCity(p.city);
-          setCategory(p.category);
-        }
-      }).catch(() => {});
-    }
+    fetchProfile(USER_ID).then((p) => {
+      if (p?.city && p?.category) {
+        setCity(p.city);
+        setCategory(p.category);
+        localStorage.setItem('sc_city', p.city);
+        localStorage.setItem('sc_category', p.category);
+        localStorage.setItem('sc_survey_done', 'true');
+        setIsSurveyDone(true);
+      }
+    }).catch(() => {});
   }, []);
 
   const loadPlaces = async () => {

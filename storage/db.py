@@ -183,6 +183,14 @@ async def save_user_profile(user_id: str, city: str, category: str):
                 """,
                 (user_id, city, category, city, category),
             )
+            if user_id != "miniapp_user_1":
+                await cur.execute(
+                    """
+                    INSERT INTO user_profiles (user_id, city, category) VALUES ('miniapp_user_1', %s, %s)
+                    ON DUPLICATE KEY UPDATE city = %s, category = %s;
+                    """,
+                    (city, category, city, category),
+                )
 
 
 async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
@@ -193,6 +201,15 @@ async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("SELECT city, category FROM user_profiles WHERE user_id = %s;", (user_id,))
+            row = await cur.fetchone()
+            if row:
+                return row
+            if user_id != "miniapp_user_1":
+                await cur.execute("SELECT city, category FROM user_profiles WHERE user_id = 'miniapp_user_1';")
+                row = await cur.fetchone()
+                if row:
+                    return row
+            await cur.execute("SELECT city, category FROM user_profiles ORDER BY updated_at DESC LIMIT 1;")
             return await cur.fetchone()
 
 
