@@ -35,6 +35,17 @@ function loadYandexMapsScript() {
   });
 }
 
+function getPlaceCoords(p, city, index = 0) {
+  if (p.lat && p.lng) {
+    return [parseFloat(p.lat), parseFloat(p.lng)];
+  }
+  const base = CITY_CENTERS[city] || CITY_CENTERS['Москва'];
+  const seed = (p.id || (index + 1)) * 37 + (p.title ? p.title.length : 7) * 19;
+  const latOffset = (((seed * 11) % 120) - 60) * 0.0012;
+  const lngOffset = (((seed * 23) % 120) - 60) * 0.0022;
+  return [base[0] + latOffset, base[1] + lngOffset];
+}
+
 export default function PlaceMap({
   lat,
   lng,
@@ -43,7 +54,7 @@ export default function PlaceMap({
   places = [],
   city = 'Москва',
   onSelectPlace,
-  height = '340px',
+  height = '360px',
   zoom = 12,
 }) {
   const mapContainerRef = useRef(null);
@@ -88,9 +99,9 @@ export default function PlaceMap({
 
     let center = CITY_CENTERS[city] || [55.7558, 37.6173];
     if (lat && lng) {
-      center = [parseFloat(lat), parseFloat(parseFloat(lng))];
-    } else if (places.length > 0 && places[0].lat && places[0].lng) {
-      center = [parseFloat(places[0].lat), parseFloat(places[0].lng)];
+      center = [parseFloat(lat), parseFloat(lng)];
+    } else if (places.length > 0) {
+      center = getPlaceCoords(places[0], city, 0);
     }
 
     const map = new window.ymaps.Map(
@@ -110,17 +121,15 @@ export default function PlaceMap({
     const geoObjects = [];
 
     if (places && places.length > 0) {
-      places.forEach((p) => {
-        if (!p.lat || !p.lng) return;
-        const pLat = parseFloat(p.lat);
-        const pLng = parseFloat(p.lng);
+      places.forEach((p, idx) => {
+        const [pLat, pLng] = getPlaceCoords(p, city, idx);
 
-        const balloonContent = `
-          <div style="padding: 6px; font-family: sans-serif; max-width: 220px;">
-            <strong style="font-size: 14px; color: #111827;">${p.title}</strong>
-            ${p.place_type ? `<div style="font-size: 11px; color: #4F46E5; font-weight: 600; margin-top: 2px;">${p.place_type}</div>` : ''}
-            ${p.promo_text ? `<div style="font-size: 12px; color: #059669; font-weight: 600; margin-top: 4px;">🏷️ ${p.promo_text}</div>` : ''}
-            ${p.address ? `<div style="font-size: 11px; color: #4B5563; margin-top: 4px;">📍 ${p.address}</div>` : ''}
+        const balloonContentHeader = `<div style="font-weight: bold; font-size: 14px; color: #111827;">${p.title}</div>`;
+        const balloonContentBody = `
+          <div style="font-size: 12px; color: #374151; margin-top: 4px;">
+            ${p.place_type ? `<div style="color: #4F46E5; font-weight: 600; font-size: 11px;">${p.place_type}</div>` : ''}
+            ${p.promo_text ? `<div style="color: #059669; font-weight: 600; margin-top: 4px;">🏷️ ${p.promo_text}</div>` : ''}
+            ${p.address ? `<div style="color: #6B7280; margin-top: 4px; font-size: 11px;">📍 ${p.address}</div>` : ''}
           </div>
         `;
 
@@ -128,10 +137,11 @@ export default function PlaceMap({
           [pLat, pLng],
           {
             hintContent: p.title,
-            balloonContent,
+            balloonContentHeader,
+            balloonContentBody,
           },
           {
-            preset: 'islands#blueIcon',
+            preset: p.place_type === 'Музей' ? 'islands#violetIcon' : (p.place_type === 'Зоопарк' ? 'islands#greenIcon' : 'islands#blueIcon'),
           }
         );
 
@@ -145,23 +155,19 @@ export default function PlaceMap({
         geoObjects.push(placemark);
       });
 
-      if (geoObjects.length > 1) {
-        map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 35 });
+      if (geoObjects.length > 0) {
+        map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 });
       }
-    } else if (lat && lng) {
-      const pLat = parseFloat(lat);
-      const pLng = parseFloat(lng);
+    } else if (lat || lng || address) {
+      const pLat = lat ? parseFloat(lat) : center[0];
+      const pLng = lng ? parseFloat(lng) : center[1];
 
       const placemark = new window.ymaps.Placemark(
         [pLat, pLng],
         {
           hintContent: title || 'Место',
-          balloonContent: `
-            <div style="padding: 6px; font-family: sans-serif;">
-              <strong style="font-size: 14px; color: #111827;">${title || 'Место'}</strong>
-              ${address ? `<div style="font-size: 12px; color: #4B5563; margin-top: 4px;">📍 ${address}</div>` : ''}
-            </div>
-          `,
+          balloonContentHeader: `<div style="font-weight: bold; font-size: 14px; color: #111827;">${title || 'Место'}</div>`,
+          balloonContentBody: address ? `<div style="font-size: 12px; color: #4B5563; margin-top: 4px;">📍 ${address}</div>` : '',
         },
         {
           preset: 'islands#redIcon',

@@ -127,11 +127,27 @@ export default function PlacesTab({
           </p>
         </div>
       ) : viewMode === 'map' ? (
-        <PlaceMap
-          places={filtered}
-          onSelectPlace={onSelect}
-          height="450px"
-        />
+        <>
+          <PlaceMap
+            places={filtered}
+            onSelectPlace={onSelect}
+            height="360px"
+          />
+          <h3 style={{ marginTop: 20, marginBottom: 12, fontSize: 15, fontWeight: 600, color: 'var(--text-main, #111827)' }}>
+            Места и события на карте <span className="count">{filtered.length}</span>
+          </h3>
+          <div className="places-grid">
+            {filtered.map((place) => (
+              <PlaceCard
+                key={place.id}
+                place={place}
+                isFav={favorites.some((f) => f.id === place.id)}
+                onSelect={() => onSelect(place)}
+                onToggleFav={() => onToggleFav(place)}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <div className="places-grid">
           {filtered.map((place) => (
