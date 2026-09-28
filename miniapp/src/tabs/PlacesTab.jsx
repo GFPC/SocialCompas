@@ -10,6 +10,7 @@ export default function PlacesTab({
   selectedTypes,
   onSelect,
   onToggleFav,
+  city,
 }) {
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
@@ -130,6 +131,7 @@ export default function PlacesTab({
         <>
           <PlaceMap
             places={filtered}
+            city={city}
             onSelectPlace={onSelect}
             height="360px"
           />

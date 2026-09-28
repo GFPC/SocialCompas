@@ -39,7 +39,8 @@ function getPlaceCoords(p, city, index = 0) {
   if (p.lat && p.lng) {
     return [parseFloat(p.lat), parseFloat(p.lng)];
   }
-  const base = CITY_CENTERS[city] || CITY_CENTERS['Москва'];
+  const targetCity = p.city || city;
+  const base = CITY_CENTERS[targetCity] || CITY_CENTERS[city] || CITY_CENTERS['Москва'];
   const seed = (p.id || (index + 1)) * 37 + (p.title ? p.title.length : 7) * 19;
   const latOffset = (((seed * 11) % 120) - 60) * 0.0012;
   const lngOffset = (((seed * 23) % 120) - 60) * 0.0022;

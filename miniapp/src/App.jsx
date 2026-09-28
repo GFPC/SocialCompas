@@ -192,6 +192,7 @@ export default function App() {
                 selectedTypes={selectedTypes}
                 onSelect={setSelectedPlace}
                 onToggleFav={handleToggleFavorite}
+                city={city}
               />
             )}
             {activeTab === 'favorites' && (
