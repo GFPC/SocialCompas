@@ -40,7 +40,7 @@ def get_main_menu_keyboard() -> List[List[Dict[str, str]]]:
     return [
         [{"text": "📍 Список мест и акций", "callback_data": "view_places"}],
         [{"text": "⭐ Избранное", "callback_data": "view_favorites"}],
-        [{"text": "📱 Перейти в мини приложение", "url": "https://miniapp-one-snowy.vercel.app/"}],
+        [{"text": "📱 Открыть MiniApp & Интерактивную карту", "url": "https://socialcompass.ru"}],
         [{"text": "⚙️ Настройки", "callback_data": "view_settings"}],
     ]
 
@@ -48,6 +48,7 @@ def get_main_menu_keyboard() -> List[List[Dict[str, str]]]:
 def get_settings_keyboard() -> List[List[Dict[str, str]]]:
     return [
         [{"text": "✏️ Изменить данные", "callback_data": "edit_profile"}],
+        [{"text": "📱 Открыть MiniApp", "url": "https://socialcompass.ru"}],
         [{"text": "🏠 В главное меню", "callback_data": "menu_main"}],
     ]
 
@@ -58,17 +59,25 @@ def get_places_list_keyboard(places: List[Dict[str, Any]]) -> List[List[Dict[str
         title = place.get("title", "Место")
         place_type = f" ({place['place_type']})" if place.get("place_type") else ""
         keyboard.append([{"text": f"🏛 {title}{place_type}", "callback_data": f"place_{place['id']}"}])
+    keyboard.append([{"text": "🗺 Открыть все на карте", "url": "https://socialcompass.ru"}])
     keyboard.append([{"text": "🏠 В главное меню", "callback_data": "menu_main"}])
     return keyboard
 
 
-def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str) -> List[List[Dict[str, str]]]:
+def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str = "", lat: Optional[float] = None, lng: Optional[float] = None) -> List[List[Dict[str, str]]]:
     fav_btn_text = "❌ Удалить из избранного" if is_fav else "⭐ Добавить в избранное"
     fav_cb = f"rem_fav_{place_id}" if is_fav else f"add_fav_{place_id}"
 
+    if lat and lng:
+        osm_url = f"https://www.openstreetmap.org/?mlat={lat}&mlon={lng}#map=16/{lat}/{lng}"
+    elif map_url and "http" in map_url:
+        osm_url = map_url
+    else:
+        osm_url = "https://socialcompass.ru"
+
     return [
         [{"text": fav_btn_text, "callback_data": fav_cb}],
-        [{"text": "🗺 Посмотреть на карте", "url": map_url if map_url else "https://max.ru"}],
+        [{"text": "🗺 Показать на карте (OpenStreetMap)", "url": osm_url}],
         [{"text": "🔙 К списку мест", "callback_data": "view_places"}],
         [{"text": "🏠 Вернуться на главную", "callback_data": "menu_main"}],
     ]
@@ -177,7 +186,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
                 msg_lines.append(f"\n_{discount_info}_")
 
             msg = "\n".join(msg_lines)
-            return msg, get_place_detail_keyboard(place_id, is_fav, place.get("map_url", ""))
+            return msg, get_place_detail_keyboard(place_id, is_fav, place.get("map_url", ""), place.get("lat"), place.get("lng"))
         except ValueError:
             pass
 
@@ -187,13 +196,20 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
         await add_favorite(user_id, place_id)
         place = await get_place_by_id(place_id)
         msg = f"✅ Место **{place['title'] if place else ''}** добавлено в избранное!"
-        return msg, get_place_detail_keyboard(place_id, True, place.get("map_url", "") if place else "")
+        map_url = place.get("map_url", "") if place else ""
+        lat = place.get("lat") if place else None
+        lng = place.get("lng") if place else None
+        return msg, get_place_detail_keyboard(place_id, True, map_url, lat, lng)
 
     if data.startswith("rem_fav_"):
         place_id = int(data.replace("rem_fav_", ""))
         await remove_favorite(user_id, place_id)
         place = await get_place_by_id(place_id)
         msg = f"❌ Место **{place['title'] if place else ''}** удалено из избранного."
+        map_url = place.get("map_url", "") if place else ""
+        lat = place.get("lat") if place else None
+        lng = place.get("lng") if place else None
+        return msg, get_place_detail_keyboard(place_id, False, map_url, lat, lng)
         return msg, get_place_detail_keyboard(place_id, False, place.get("map_url", "") if place else "")
 
     # 7. View Favorites List

@@ -8,7 +8,7 @@ import os
 
 SERVER_HOST = os.getenv("SERVER_HOST", "80.90.189.13")
 SERVER_USER = os.getenv("SERVER_USER", "root")
-SERVER_PASS = os.getenv("SERVER_PASS", "YOUR_SSH_PASSWORD_HERE")
+SERVER_PASS = os.getenv("SERVER_PASS", r"***REMOVED***")
 PROJECT_DIR = "/home/SocialCompas"
 
 def run():

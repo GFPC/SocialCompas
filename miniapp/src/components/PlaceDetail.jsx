@@ -131,8 +131,14 @@ export default function PlaceDetail({
         )}
       </div>
 
-      {/* Встроенная карта по адресу */}
-      {place.address && <PlaceMap address={place.address} />}
+      {/* Интерактивная OpenStreetMap карта */}
+      <PlaceMap
+        lat={place.lat}
+        lng={place.lng}
+        address={place.address}
+        title={place.title}
+        city={place.city}
+      />
 
       {/* Ссылка на сайт или на карту */}
       {place.map_url && (

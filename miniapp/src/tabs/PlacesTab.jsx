@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Compass } from 'lucide-react';
+import { Search, Compass, Map, List } from 'lucide-react';
 import PlaceCard from '../components/PlaceCard';
+import PlaceMap from '../components/PlaceMap';
 
 export default function PlacesTab({
   places,
@@ -11,6 +12,7 @@ export default function PlacesTab({
   onToggleFav,
 }) {
   const [query, setQuery] = useState('');
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
 
   const filtered = useMemo(() => {
     let result = places;
@@ -41,21 +43,62 @@ export default function PlacesTab({
 
   return (
     <>
-      <div className="search-wrap" style={{ position: 'relative', marginBottom: 14 }}>
-        <Search
-          size={16}
-          style={{
-            position: 'absolute', left: 12, top: '50%',
-            transform: 'translateY(-50%)', color: 'var(--text-soft)',
-          }}
-        />
-        <input
-          className="input"
-          style={{ paddingLeft: 38 }}
-          placeholder="Поиск по местам и акциям"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
+        <div className="search-wrap" style={{ position: 'relative', flex: 1, marginBottom: 0 }}>
+          <Search
+            size={16}
+            style={{
+              position: 'absolute', left: 12, top: '50%',
+              transform: 'translateY(-50%)', color: 'var(--text-soft)',
+            }}
+          />
+          <input
+            className="input"
+            style={{ paddingLeft: 38 }}
+            placeholder="Поиск по местам и акциям"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        <div style={{ display: 'flex', background: 'var(--card-bg, #F3F4F6)', borderRadius: 10, padding: 3 }}>
+          <button
+            onClick={() => setViewMode('list')}
+            style={{
+              border: 'none',
+              background: viewMode === 'list' ? 'var(--primary-color, #4F46E5)' : 'transparent',
+              color: viewMode === 'list' ? '#fff' : 'var(--text-soft)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            <List size={16} /> Список
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            style={{
+              border: 'none',
+              background: viewMode === 'map' ? 'var(--primary-color, #4F46E5)' : 'transparent',
+              color: viewMode === 'map' ? '#fff' : 'var(--text-soft)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            <Map size={16} /> Карта
+          </button>
+        </div>
       </div>
 
       <h2 className="section-title">
@@ -83,7 +126,13 @@ export default function PlacesTab({
               : 'Для этого города пока нет акций'}
           </p>
         </div>
-          ) : (
+      ) : viewMode === 'map' ? (
+        <PlaceMap
+          places={filtered}
+          onSelectPlace={onSelect}
+          height="450px"
+        />
+      ) : (
         <div className="places-grid">
           {filtered.map((place) => (
             <PlaceCard
