@@ -56,11 +56,14 @@ export default function PlaceMap({
   city = 'Москва',
   onSelectPlace,
   height = '360px',
-  zoom = 12,
+  zoom,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Определяем подходящий масштаб: 15 для конкретного места, 13 для списка по городу
+  const targetZoom = zoom || (lat && lng ? 15 : 13);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,7 +112,7 @@ export default function PlaceMap({
       mapContainerRef.current,
       {
         center,
-        zoom,
+        zoom: targetZoom,
         controls: ['zoomControl', 'fullscreenControl'],
       },
       {
@@ -157,7 +160,18 @@ export default function PlaceMap({
       });
 
       if (geoObjects.length > 0) {
-        map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 });
+        // Устанавливаем границы меток, но ограничиваем zoom от отдаления на весь мир (минимум 12, максимум 15)
+        map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 })
+          .then(() => {
+            if (map.getZoom() < 12) {
+              map.setZoom(12);
+            } else if (map.getZoom() > 15) {
+              map.setZoom(15);
+            }
+          })
+          .catch(() => {
+            map.setCenter(center, targetZoom);
+          });
       }
     } else if (lat || lng || address) {
       const pLat = lat ? parseFloat(lat) : center[0];
@@ -176,6 +190,7 @@ export default function PlaceMap({
       );
 
       map.geoObjects.add(placemark);
+      map.setCenter([pLat, pLng], 15);
     }
   };
 
