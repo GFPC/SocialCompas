@@ -1,0 +1,151 @@
+# DATA-API.yaml — SocialCompass Data API Schema Specification
+
+data_schema_version: "2.0.0"
+description: >
+  Официальное описание структуры и взаимосвязи сущностей данных SocialCompass
+  (Города, Категории благополучателей, Места и акции, Избранное, Профили пользователей, Состояния FSM).
+
+entities:
+  City:
+    table_name: cities
+    description: Каталог городов присутствия сервиса
+    primary_key: id (INT, AUTO_INCREMENT)
+    fields:
+      id:
+        type: integer
+        required: true
+        description: Идентификатор города
+      name:
+        type: string(64)
+        required: true
+        unique: true
+        description: Название города (например, Москва, Новосибирск, Санкт-Петербург)
+      is_active:
+        type: integer
+        default: 1
+        description: Флаг активности города (1 — активен, 0 — заблокирован)
+      created_at:
+        type: timestamp
+        default: CURRENT_TIMESTAMP
+
+  Category:
+    table_name: categories
+    description: Справочник льготных категорий благополучателей
+    primary_key: id (INT, AUTO_INCREMENT)
+    fields:
+      id:
+        type: integer
+        required: true
+        description: Идентификатор категории
+      name:
+        type: string(64)
+        required: true
+        unique: true
+        description: Название категории (Студенты, Пенсионеры, Участники СВО)
+      is_active:
+        type: integer
+        default: 1
+        description: Флаг активности категории
+      created_at:
+        type: timestamp
+        default: CURRENT_TIMESTAMP
+
+  Place:
+    table_name: places
+    description: Каталог партнерских мест, льгот и скидочных предложений
+    primary_key: id (INT, AUTO_INCREMENT)
+    fields:
+      id:
+        type: integer
+        required: true
+        description: Уникальный ID акции/места
+      city:
+        type: string(64)
+        required: true
+        description: Город привязки места
+      category:
+        type: string(64)
+        required: true
+        description: Категория льготников
+      title:
+        type: string(255)
+        required: true
+        description: Название заведения или акции
+      place_type:
+        type: string(64)
+        default: "Место"
+        description: Тип заведения (Музей, Театр, Аквапарк, Боулинг, Кофейня, Спорт)
+      promo_text:
+        type: text
+        required: true
+        description: Подробное описание скидки или условия бесплатного посещения
+      schedule:
+        type: string(255)
+        description: Режим работы и льготные часы
+      address:
+        type: string(255)
+        description: Физический адрес заведения
+      map_url:
+        type: string(255)
+        description: Ссылка на навигационную карту (Яндекс.Карты / 2ГИС)
+      discount_info:
+        type: string(255)
+        nullable: true
+        description: Дополнительная юридическая информация или дисклеймер
+
+  UserProfile:
+    table_name: user_profiles
+    description: Сохраненный профиль пользователя (город и категория)
+    primary_key: user_id (VARCHAR(64))
+    fields:
+      user_id:
+        type: string(64)
+        required: true
+        description: Telegram/MAX ID пользователя
+      city:
+        type: string(64)
+        required: true
+        description: Выбранный город
+      category:
+        type: string(64)
+        required: true
+        description: Выбранная льготная категория
+      updated_at:
+        type: timestamp
+        default: CURRENT_TIMESTAMP
+
+  UserFavorite:
+    table_name: user_favorites
+    description: Связь «Пользователь — Избранное место» (Many-to-Many)
+    primary_key: id (INT, AUTO_INCREMENT)
+    unique_constraints:
+      - [user_id, place_id]
+    fields:
+      id:
+        type: integer
+        required: true
+      user_id:
+        type: string(64)
+        required: true
+        description: Telegram/MAX ID пользователя
+      place_id:
+        type: integer
+        required: true
+        description: Ссылка на id из таблицы places
+      created_at:
+        type: timestamp
+        default: CURRENT_TIMESTAMP
+
+relationships:
+  - from: UserFavorite.place_id
+    to: Place.id
+    type: Many-to-One
+    description: Одно избранное место ссылается на одну запись в каталоге places
+
+  - from: UserProfile.city
+    to: City.name
+    type: Many-to-One
+
+  - from: UserProfile.category
+    to: Category.name
+    type: Many-to-One

@@ -60,6 +60,12 @@ async def generate_ai_response(req_data: ChatRequest, request: Request):
     if not req_data.messages:
         raise HTTPException(status_code=400, detail="Список сообщений не может быть пустым")
 
+    if not config.AITUNNEL_API_KEY or "YOUR_" in config.AITUNNEL_API_KEY:
+        return {
+            "ok": True,
+            "message": "Я — ассистент сервиса SocialCompass 🧭. Чтобы включить онлайн-ИИ, укажите рабочий AITUNNEL_API_KEY в файле .env или переменных окружения."
+        }
+
     # Fetch context places from DB
     places_context = ""
     try:

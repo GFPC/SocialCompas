@@ -1,25 +1,47 @@
-# 🤖 SocialCompas — Демо-Бот для MAX Мессенджера
+# 🧭 Экосистема «Социальный Компас» (SocialCompass)
 
-Готовое решение демо-бота для платформы **MAX Messenger** (с поддержкой актуального API `https://platform-api2.max.ru`), разработанное для проекта **SocialCompas** («Социальный Компас»).
+Единая цифровая экосистема социального навигатора для **MAX Messenger** и **Telegram MiniApp**, разработанная для поиска скидок, акций, льгот, культурных площадок и социальных программ для **студентов**, **пенсионеров** и **участников СВО** в городах России (Москва, Санкт-Петербург, Новосибирск).
 
-Бот умеет навигировать пользователей по социальным сервисам, льготам, мероприятиям и юридической помощи с использованием интерактивных кнопок, меню и обработчиков команд.
+[![Production Status](https://img.shields.io/badge/Production-Live-success)](https://socialcompass.ru)
+[![API Docs](https://img.shields.io/badge/OpenAPI-Swagger-blue)](https://api.socialcompass.ru/docs)
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev)
 
 ---
 
-## 🌟 Основные возможности
+## 🌟 Ключевые возможности
 
-1. **Два режима работы**:
-   - **Local Simulator Mode** (Локальный симулятор) — встроенный веб-интерфейс и консольный чат для моментального тестирования логики и кнопок без токена и модерации в MAX.
-   - **Production Mode** — подключение к реальному API MAX через **Long-Polling** или **Webhook**.
-2. **Интерактивный «Социальный Компас»**:
-   - Категории: *Социальные поддержки и льготы*, *Городские мероприятия*, *Юридическая помощь*, *Волонтерство*.
-   - Инлайн-клавиатуры и обработка Callback Queries.
-3. **Команды бота**:
-   - `/start` — приветствие и главное меню.
-   - `/compass` — интерактивный навигатор.
-   - `/info` — информация о MAX Bot API и статусе.
-   - `/echo <текст>` — проверка связи.
-   - `/help` — список доступных команд.
+1. **Telegram & MAX WebApp MiniApp**:
+   * Адаптивный веб-интерфейс в фирменной гамме MAX Messenger (фиолетово-синий градиент).
+   * Выбор города и категории благополучателя на стартовом онбординге.
+   * Фильтрация мест по типам (Музеи, Театры, Аквапарки, Боулинг, Кофейни, Спорт и т.д.).
+   * Интерактивная карта площадок и быстрый просмотр детальных карточек.
+   * Избранное и личные списки мест.
+
+2. **Умный ИИ-Гид (AI Tunnel + gpt-4o-mini)**:
+   * Персональный ассистент по скидкам с динамическим обогащением контекста из базы данных MySQL.
+   * **Строгий режим безопасности (Guardrails)**: ИИ отвечает *только* на тематические вопросы о льготах и местах и отказывает при попытках абуза или посторонних запросах.
+   * **Лимитер запросов (Rate Limiter)**: Ограничение максимум 10 запросов в минуту на пользователя/IP для предотвращения перерасхода ресурсов.
+
+3. **MAX Messenger Бот & Симулятор**:
+   * Поддержка двух способов подключения к MAX API: **Webhook** и **Long-Polling**.
+   * Локальный интерактивный веб-симулятор (`--sim`) для тестирования диалогов без реального токена.
+
+4. **Высокий уровень безопасности**:
+   * Строгая аутентификация через проверку HMAC-SHA256 подписи `initData` мессенджера.
+   * Бесшовный доступ к эндпоинтам профиля и избранного только по защищенному **Bearer JWT токену**.
+
+---
+
+## 🛠 Технологический стек
+
+* **Backend**: Python 3.11, FastAPI, Uvicorn, Pydantic v2, HTTPX, PyJWT.
+* **Database & ORM**: MySQL 8.0 (`aiomysql`), Alembic (миграции), SQLAlchemy.
+* **Caching & FSM**: Redis 7 (`redis-py`).
+* **Frontend**: React 18, Vite, Tailwind CSS / Custom UI, Lucide Icons.
+* **AI & LLM Integration**: AI Tunnel API (`gpt-4o-mini`).
+* **Infrastructure**: Docker, Docker Compose, Nginx, Certbot SSL (HTTPS).
 
 ---
 
@@ -27,85 +49,88 @@
 
 ```
 SocialCompas/
-├── config.py         # Загрузка и валидация конфигурации (.env)
-├── max_api.py        # Асинхронный HTTP-клиент для MAX Bot API v2
-├── handlers.py       # Бизнес-логика, команды и обработка кнопок
-├── simulator.py      # Веб-симулятор (FastAPI + HTML) и CLI-симулятор
-├── main.py           # Точка входа (выбор режима: --sim, --polling, --webhook)
-├── requirements.txt  # Зависимости Python (httpx, fastapi, uvicorn и др.)
-├── .env.example      # Шаблон переменных окружения
-└── README.md         # Документация проекта
+├── api/                   # REST API роутеры FastAPI (v1: places, profile, favorites, chat, auth)
+├── core/                  # Авторизация, JWT токены, валидация HMAC initData
+├── data/                  # Импортируемые данные Excel и тестовые наборы (test_accounts.json, test_data.json)
+├── fsm/                   # Хранилище состояний бота (Redis / MySQL / Memory)
+├── miniapp/               # Исходный код React MiniApp (Vite + JSX + CSS)
+├── models/                # Pydantic и SQLAlchemy схемы данных
+├── scripts/               # Скрипты импорта Excel, симулятора, автодеплоя и Nginx
+├── storage/               # Асинхронные пулы MySQL (aiomysql) и Redis
+├── test_bot.py            # Полный автоматический тест-сюит бэкенда и безопасности
+├── config.py              # Загрузка и валидация конфигурации (.env)
+├── main.py                # Единая точка входа backend и бота
+├── docker-compose.yml     # Инфраструктура БД (MySQL + Redis) для разработки
+├── docker-compose.prod.yml# Production контейнеризация (FastAPI + MySQL + Redis)
+├── openapi.yaml           # Полная OpenAPI 3.0 спецификация REST API
+├── DATA-API.yaml          # Спецификация структур данных и схем БД
+├── requirements.txt       # Зафиксированные версии зависимостей Python (==)
+├── .dockerignore          # Исключения для сборки Docker образов
+├── .env.example           # Шаблон переменных окружения без секретов
+└── README.md              # Документация проекта
 ```
 
 ---
 
-## 🚀 Быстрый запуск
+## 🚀 Быстрый запуск через Docker Compose
 
-### 1. Установка зависимостей
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Локальное тестирование в Веб-Симуляторе (Без токена)
-
-Для проверки работы кнопок и диалогов запустите локальный симулятор:
+### 1. Клонирование репозитория и настройка окружения
 
 ```bash
-python main.py --sim
-```
+git clone https://github.com/GFPC/SocialCompas.git
+cd SocialCompas
 
-После этого откройте в браузере: **`http://localhost:8000`**
-
- Вы увидите интерактивный веб-чат MAX Messenger, где можно кликать по кнопкам и отправлять команды!
-
-#### Консольный симулятор (CLI):
-```bash
-python main.py --cli
-```
-
----
-
-## 🔑 Подключение к реальному MAX Мессенджеру
-
-### Шаг 1. Получение токена бота
-1. Перейдите в **Бизнес-кабинет MAX**: [business.max.ru](https://business.max.ru) или воспользуйтесь системным ботом **`@MasterBot`** в самом мессенджере MAX.
-2. Создайте нового бота (команда `/create` у `@MasterBot` или кнопка «Создать бот» в кабинете).
-3. Скопируйте полученный API токен.
-
-### Шаг 2. Настройка `.env`
-Создайте файл `.env` на основе шаблона:
-
-```bash
+# Создайте .env файл из шаблона
 cp .env.example .env
 ```
 
-Заполните значения:
+Заполните переменные окружения в `.env` (при необходимости):
 ```env
-MAX_BOT_TOKEN=ваш_токен_от_masterbot
-MAX_API_URL=https://platform-api2.max.ru
-SIMULATION_MODE=false
+MAX_BOT_TOKEN=YOUR_MAX_BOT_TOKEN_HERE
+AITUNNEL_API_KEY=YOUR_AITUNNEL_API_KEY_HERE
+MYSQL_PASSWORD=bot_password
 ```
 
-### Шаг 3. Запуск бота в режиме Long-Polling
+### 2. Запуск проекта в Docker
 
 ```bash
-python main.py --polling
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Бот начнет слушать обновления с сервера MAX и отвечать пользователям в мессенджере!
+После запуска контейнеров:
+* **MiniApp веб-версия**: `http://localhost:8000`
+* **Swagger UI (Интерактивная документация)**: `http://localhost:8000/docs`
+* **OpenAPI 3.0 YAML спецификация**: `http://localhost:8000/openapi.json`
 
-### Шаг 4. Запуск бота в режиме Webhook (для продакшна)
+---
+
+## 🧪 Запуск автоматических тестов
+
+В проекте предустановлен полный интеграционный тест-сюит, проверяющий:
+* Корректность онбординга и сценариев Miro.
+* Валидацию HMAC-SHA256 подписи WebApp `initData`.
+* Выдачу и отклонение поддельных JWT-токенов.
+* Ограничение неавторизованного доступа (401 Unauthorized).
+* Интеграцию с ИИ-ассистентом и отказ от ответов на посторонние вопросы.
+
+Для запуска тестов выполните:
 
 ```bash
-python main.py --webhook
+python test_bot.py
 ```
 
 ---
 
-## 🛠 Технологии
+## 📄 Спецификации API и данные
 
-- **Python 3.11+**
-- **HTTPX** — асинхронные HTTP-запросы к MAX API
-- **FastAPI / Uvicorn** — Webhook сервер и веб-симулятор
-- **MAX Bot API v2** (`platform-api2.max.ru`)
+1. **OpenAPI 3.0 REST Specification**: [`openapi.yaml`](openapi.yaml)
+2. **Data API Schema Specification**: [`DATA-API.yaml`](DATA-API.yaml)
+3. **Тестовые аккаунты**: [`data/test_accounts.json`](data/test_accounts.json)
+4. **Тестовый каталог мест**: [`data/test_data.json`](data/test_data.json)
+
+---
+
+## 🌐 Production сервер
+
+* **Основной сайт (MiniApp SPA)**: [https://socialcompass.ru](https://socialcompass.ru)
+* **API Субдомен**: [https://api.socialcompass.ru/docs](https://api.socialcompass.ru/docs)

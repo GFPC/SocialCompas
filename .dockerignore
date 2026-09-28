@@ -1,0 +1,39 @@
+# Version control
+.git/
+.gitignore
+
+# Environments & Local Configs
+.env
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.benchmarks/
+
+# Node / Frontend build artifacts
+miniapp/node_modules/
+miniapp/dist/
+miniapp/.vite/
+node_modules/
+dist/
+
+# IDE & OS generated
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs & Temporary files
+*.log
+scripts/check_db.py
+scripts/run_check.py
+scripts/discount_scraper.py
+scripts/scraped_discounts.json

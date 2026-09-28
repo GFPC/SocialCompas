@@ -1,0 +1,411 @@
+openapi: 3.0.3
+info:
+  title: SocialCompass REST API Specification
+  description: >
+    Единая спецификация REST API платформы «Социальный Компас» для взаимодействия с MiniApp, 
+    MAX Messenger и мобильными клиентами. Обеспечивает получение данных о льготных местах,
+    управление профилем, избранным, авторизацию через Telegram/MAX WebApp HMAC и работу с ИИ-гидом.
+  version: 2.0.0
+  contact:
+    name: Команда SocialCompass
+    url: https://socialcompass.ru
+    email: support@socialcompass.ru
+
+servers:
+  - url: https://api.socialcompass.ru
+    description: Production API Server
+  - url: http://localhost:8000
+    description: Local Development Server
+
+paths:
+  /api/v1/cities:
+    get:
+      summary: Получение списка активных городов
+      tags:
+        - Metadata
+      responses:
+        '200':
+          description: Успешный ответ со списком городов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/City'
+
+  /api/v1/categories:
+    get:
+      summary: Получение списка категорий благополучателей
+      tags:
+        - Metadata
+      responses:
+        '200':
+          description: Успешный ответ со списком категорий
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+
+  /api/v1/places:
+    get:
+      summary: Получение каталога мест и льгот с фильтрацией
+      tags:
+        - Places
+      parameters:
+        - name: city
+          in: query
+          required: true
+          description: Название города (например, Москва, Санкт-Петербург, Новосибирск)
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: true
+          description: Категория льготников (Студенты, Пенсионеры, Участники СВО)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список найденных мест и акций
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 10
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Place'
+
+  /api/v1/places/{place_id}:
+    get:
+      summary: Получение детальной информации о месте по ID
+      tags:
+        - Places
+      parameters:
+        - name: place_id
+          in: path
+          required: true
+          description: Уникальный идентификатор места
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Детальные данные объекта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  place:
+                    $ref: '#/components/schemas/Place'
+        '404':
+          description: Место не найдено
+
+  /api/v1/auth/webapp:
+    post:
+      summary: Авторизация через WebApp initData (HMAC-SHA256)
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - init_data
+              properties:
+                init_data:
+                  type: string
+                  description: Строка initData, полученная от Telegram/MAX WebApp SDK
+      responses:
+        '200':
+          description: Успешная валидация подписи HMAC и выдача JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  user_id:
+                    type: string
+                    example: "998877"
+                  token:
+                    type: string
+                    description: Bearer JWT токен для последующих запросов
+        '401':
+          description: Недействительная подпись initData HMAC
+
+  /api/v1/profile/me:
+    get:
+      summary: Получение профиля текущего пользователя
+      tags:
+        - Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  profile:
+                    $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Не авторизован (отсутствует или невалиден JWT токен)
+
+    post:
+      summary: Обновление города и категории профиля
+      tags:
+        - Profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - city
+                - category
+              properties:
+                city:
+                  type: string
+                  example: "Москва"
+                category:
+                  type: string
+                  example: "Студенты"
+      responses:
+        '200':
+          description: Профиль обновлен
+        '401':
+          description: Не авторизован
+
+  /api/v1/favorites:
+    get:
+      summary: Получение списка избранных мест пользователя
+      tags:
+        - Favorites
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Список избранных мест
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Place'
+        '401':
+          description: Не авторизован
+
+  /api/v1/favorites/{place_id}:
+    post:
+      summary: Добавление места в избранное
+      tags:
+        - Favorites
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: place_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Место добавлено в избранное
+        '401':
+          description: Не авторизован
+
+    delete:
+      summary: Удаление места из избранного
+      tags:
+        - Favorites
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: place_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Место удалено из избранного
+        '401':
+          description: Не авторизован
+
+  /api/v1/chat:
+    post:
+      summary: Обращение к ИИ-ассистенту (AI Tunnel + DB Context + Rate Limit)
+      tags:
+        - AI Assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - messages
+              properties:
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        example: "user"
+                      content:
+                        type: string
+                        example: "Какие аквапарки есть со скидкой?"
+                city:
+                  type: string
+                  example: "Москва"
+                category:
+                  type: string
+                  example: "Студенты"
+      responses:
+        '200':
+          description: Ответ ИИ-ассистента
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "В Москве со скидкой 30% для студентов есть Аквапарк «Аквамир»..."
+        '429':
+          description: Превышен лимит запросов (10 запросов в минуту)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    City:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Москва"
+        is_active:
+          type: integer
+          example: 1
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Студенты"
+        is_active:
+          type: integer
+          example: 1
+
+    Place:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 968
+        city:
+          type: string
+          example: "Москва"
+        category:
+          type: string
+          example: "Студенты"
+        title:
+          type: string
+          example: "Государственная Третьяковская галерея"
+        place_type:
+          type: string
+          example: "Музей"
+        promo_text:
+          type: string
+          example: "Бесплатное посещение основных экспозиций в 1-е воскресенье каждого месяца."
+        schedule:
+          type: string
+          example: "вт, ср, вс 10:00–18:00; чт, пт, сб 10:00–21:00"
+        address:
+          type: string
+          example: "Лаврушинский пер., 10"
+        map_url:
+          type: string
+          example: "https://tretyakovgallery.ru"
+        discount_info:
+          type: string
+          nullable: true
+
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: string
+          example: "998877"
+        city:
+          type: string
+          example: "Москва"
+        category:
+          type: string
+          example: "Студенты"

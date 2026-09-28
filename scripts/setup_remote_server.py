@@ -6,9 +6,9 @@ import paramiko
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
-SERVER_HOST = "80.90.189.13"
-SERVER_USER = "root"
-SERVER_PASS = r"***REMOVED***"
+SERVER_HOST = os.getenv("SERVER_HOST", "80.90.189.13")
+SERVER_USER = os.getenv("SERVER_USER", "root")
+SERVER_PASS = os.getenv("SERVER_PASS", "YOUR_SSH_PASSWORD_HERE")
 PROJECT_DIR = "/home/SocialCompas"
 GIT_REPO = "https://github.com/GFPC/SocialCompas.git"
 

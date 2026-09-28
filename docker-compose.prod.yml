@@ -18,7 +18,7 @@ services:
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_USER=bot_user
-      - MYSQL_PASSWORD=bot_password
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-bot_password}
       - MYSQL_DB=socialcompas_db
       - AITUNNEL_API_KEY=${AITUNNEL_API_KEY:-YOUR_AITUNNEL_API_KEY_HERE}
       - AITUNNEL_BASE_URL=https://api.aitunnel.ru/v1
