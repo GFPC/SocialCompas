@@ -62,8 +62,28 @@ async def import_excel_data():
                     if not row or not row[0] or not row[2]:
                         continue
 
-                    city = str(row[0]).strip()
-                    category = str(row[1]).strip() if row[1] else "Все"
+                    raw_city = str(row[0]).strip()
+                    city_lower = raw_city.lower()
+                    if "петербург" in city_lower or "спб" in city_lower:
+                        city = "Санкт-Петербург"
+                    elif "новосибирск" in city_lower:
+                        city = "Новосибирск"
+                    elif "москва" in city_lower:
+                        city = "Москва"
+                    else:
+                        city = raw_city
+
+                    raw_cat = str(row[1]).strip() if row[1] else "Все"
+                    cat_lower = raw_cat.lower()
+                    if "студент" in cat_lower:
+                        category = "Студенты"
+                    elif "пенсион" in cat_lower:
+                        category = "Пенсионеры"
+                    elif "сво" in cat_lower or "участник" in cat_lower:
+                        category = "Участники СВО"
+                    else:
+                        category = raw_cat
+
                     title = str(row[2]).strip()
                     place_type = str(row[3]).strip() if len(row) > 3 and row[3] else "Место"
                     promo_text = str(row[4]).strip() if len(row) > 4 and row[4] else ""

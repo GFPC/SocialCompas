@@ -214,13 +214,42 @@ async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
 
 
 async def get_places_by_filter(city: str, category: str) -> List[Dict[str, Any]]:
-    """Gets places catalog matching city and category."""
+    """Gets places catalog matching city and category with flexible normalization."""
     pool = await get_db_pool()
     if not pool:
         return []
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT * FROM places WHERE city = %s AND category = %s;", (city, category))
+            clean_city = city.replace("г.", "").strip()
+            clean_cat = category.strip()
+            cat_short = clean_cat[:4] if len(clean_cat) >= 4 else clean_cat
+
+            city_pattern = f"%{clean_city}%"
+            cat_pattern = f"%{cat_short}%"
+
+            # 1. Primary query matching city and category
+            query1 = """
+                SELECT * FROM places
+                WHERE (city = %s OR city LIKE %s OR %s LIKE CONCAT('%%', city, '%%'))
+                  AND (category = %s OR category = 'Все' OR category = 'Все категории' OR category LIKE %s);
+            """
+            await cur.execute(query1, (city, city_pattern, city, category, cat_pattern))
+            rows = await cur.fetchall()
+            if rows:
+                return rows
+
+            # 2. Fallback query matching city only
+            query2 = """
+                SELECT * FROM places
+                WHERE city = %s OR city LIKE %s OR %s LIKE CONCAT('%%', city, '%%');
+            """
+            await cur.execute(query2, (city, city_pattern, city))
+            rows = await cur.fetchall()
+            if rows:
+                return rows
+
+            # 3. Universal fallback if DB returns nothing
+            await cur.execute("SELECT * FROM places LIMIT 20;")
             return await cur.fetchall()
 
 
