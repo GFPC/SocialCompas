@@ -99,10 +99,26 @@ async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state:
             return msg, get_city_keyboard()
 
     data = await ctx.get_data()
-    city = data.get("city", "Москва")
-    category = data.get("category", "Студенты")
-    msg = f"🤖 Ваш профиль: **{city}** (**{category}**). Воспользуйтесь меню для работы с ботом:"
-    return msg, get_main_menu_keyboard()
+    user_id = event.user_id if hasattr(event, "user_id") else None
+    profile = await get_user_profile(user_id) if user_id else None
+
+    city = profile["city"] if profile else data.get("city", "Москва")
+    category = profile["category"] if profile else data.get("category", "Студенты")
+
+    chat_history = data.get("chat_history", [])
+    chat_history.append({"role": "user", "content": text})
+
+    try:
+        from api.v1.chat import get_ai_completion
+        ai_reply = await get_ai_completion(chat_history, city=city, category=category)
+        chat_history.append({"role": "assistant", "content": ai_reply})
+        # Сохраняем последние 10 сообщений в истории FSM для контроля токенов
+        await ctx.update_data(chat_history=chat_history[-10:], city=city, category=category)
+        return ai_reply, get_main_menu_keyboard()
+    except Exception as exc:
+        logger.error(f"AI response failed in bot: {exc}")
+        msg = f"🤖 Ваш профиль: **{city}** (**{category}**). Задайте любой вопрос или воспользуйтесь меню:"
+        return msg, get_main_menu_keyboard()
 
 
 async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_state: Optional[str]) -> Tuple[str, List[List[Dict[str, str]]]]:

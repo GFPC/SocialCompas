@@ -49,27 +49,16 @@ def check_rate_limit(client_id: str):
     _rate_limit_records[client_id].append(now)
 
 
-@router.post("")
-async def generate_ai_response(req_data: ChatRequest, request: Request):
+async def get_ai_completion(messages: List[Dict[str, str]], city: str = "Москва", category: str = "Студенты") -> str:
     """
-    Генерирует ответ ИИ-ассистента SocialCompass через AI Tunnel API с обогащением данными из базы и лимитом запросов.
+    Генерирует ответ ИИ через AI Tunnel API с ограничением по длине контекста и количеству токенов.
     """
-    client_ip = request.client.host if request.client else "unknown"
-    check_rate_limit(client_ip)
-
-    if not req_data.messages:
-        raise HTTPException(status_code=400, detail="Список сообщений не может быть пустым")
-
     if not config.AITUNNEL_API_KEY or "YOUR_" in config.AITUNNEL_API_KEY:
-        return {
-            "ok": True,
-            "message": "Я — ассистент сервиса SocialCompass 🧭. Чтобы включить онлайн-ИИ, укажите рабочий AITUNNEL_API_KEY в файле .env или переменных окружения."
-        }
+        return "Я — ассистент сервиса SocialCompass 🧭. Чтобы включить онлайн-ИИ, укажите рабочий AITUNNEL_API_KEY в файле .env или переменных окружения."
 
-    # Fetch context places from DB
     places_context = ""
     try:
-        places = await get_places_by_filter(req_data.city, req_data.category)
+        places = await get_places_by_filter(city, category)
         if places:
             places_summary = []
             for p in places[:8]:
@@ -89,12 +78,12 @@ async def generate_ai_response(req_data: ChatRequest, request: Request):
         "• Информация о скидках, акциях и льготах для выбранной категории пользователей.\n"
         "• Отвечай вежливо, информативно и с эмодзи на русском языке.\n\n"
         f"КОНТЕКСТ ТЕКУЩЕГО ПОЛЬЗОВАТЕЛЯ:\n"
-        f"• Город: '{req_data.city}'\n"
-        f"• Категория: '{req_data.category}'\n"
+        f"• Город: '{city}'\n"
+        f"• Категория: '{category}'\n"
     )
 
     if places_context:
-        system_prompt += f"\nДоступные места и акции из базы данных SocialCompass ({req_data.city}, {req_data.category}):\n{places_context}\n\n"
+        system_prompt += f"\nДоступные места и акции из базы данных SocialCompass ({city}, {category}):\n{places_context}\n\n"
 
     system_prompt += (
         "ПРАВИЛА И ОГРАНИЧЕНИЯ (ОТКАЗ ОТ ПОСТОРОННИХ ТЕМ):\n"
@@ -105,9 +94,13 @@ async def generate_ai_response(req_data: ChatRequest, request: Request):
     )
 
     formatted_messages = [{"role": "system", "content": system_prompt}]
-    for m in req_data.messages[-6:]: # Keep last 6 context messages
-        role = "assistant" if m.role in ("assistant", "ai") else "user"
-        formatted_messages.append({"role": role, "content": m.content})
+    # Берем не более 6 последних сообщений диалога для экономии токенов
+    for m in messages[-6:]:
+        role = "assistant" if m.get("role") in ("assistant", "ai") else "user"
+        raw_content = m.get("content") or m.get("text") or ""
+        # Обрезаем каждое сообщение до 400 символов для предотвращения перерасхода токенов
+        content = raw_content[:400] if len(raw_content) > 400 else raw_content
+        formatted_messages.append({"role": role, "content": content})
 
     headers = {
         "Authorization": f"Bearer {config.AITUNNEL_API_KEY}",
@@ -121,23 +114,40 @@ async def generate_ai_response(req_data: ChatRequest, request: Request):
         "temperature": 0.2
     }
 
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{config.AITUNNEL_BASE_URL}/chat/completions",
+            json=payload,
+            headers=headers
+        )
+        if resp.status_code != 200:
+            logger.error(f"AI Tunnel API error status {resp.status_code}: {resp.text}")
+            raise HTTPException(status_code=502, detail="Сервис ИИ временно недоступен. Попробуйте позже.")
+
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+
+@router.post("")
+async def generate_ai_response(req_data: ChatRequest, request: Request):
+    """
+    Генерирует ответ ИИ-ассистента SocialCompass через AI Tunnel API с обогащением данными из базы и лимитом запросов.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    check_rate_limit(client_ip)
+
+    if not req_data.messages:
+        raise HTTPException(status_code=400, detail="Список сообщений не может быть пустым")
+
+    raw_msgs = [{"role": m.role, "content": m.content} for m in req_data.messages]
+    city = req_data.city or "Москва"
+    category = req_data.category or "Студенты"
+
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"{config.AITUNNEL_BASE_URL}/chat/completions",
-                json=payload,
-                headers=headers
-            )
-            if resp.status_code != 200:
-                logger.error(f"AI Tunnel API error status {resp.status_code}: {resp.text}")
-                raise HTTPException(status_code=502, detail="Сервис ИИ временно недоступен. Попробуйте позже.")
-
-            data = resp.json()
-            answer = data["choices"][0]["message"]["content"]
-            return {"ok": True, "message": answer}
-
+        answer = await get_ai_completion(raw_msgs, city=city, category=category)
+        return {"ok": True, "message": answer}
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Error communicating with AI Tunnel: {exc}")
+        logger.error(f"Error in generate_ai_response: {exc}")
         raise HTTPException(status_code=500, detail="Ошибка обработки запроса к ИИ")

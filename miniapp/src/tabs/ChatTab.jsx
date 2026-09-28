@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Bot, User } from 'lucide-react';
+import { Send, Sparkles, Bot, User, Trash2 } from 'lucide-react';
 import { sendChatMessage } from '../api';
 
 const SUGGESTIONS = [
@@ -35,22 +35,44 @@ function renderFormattedText(text) {
 }
 
 export default function ChatTab({ city = 'Москва', category = 'Студенты' }) {
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      role: 'ai',
-      text: `Привет! Я ИИ-ассистент SocialCompass. Подскажу акции и места в г. ${city} для категории «${category}». О чём хотите узнать?`,
-    },
-  ]);
+  const getDefaultWelcome = () => [{
+    id: 'welcome',
+    role: 'ai',
+    text: `Привет! Я ИИ-ассистент SocialCompass 🧭. Подскажу акции и места в г. ${city} для категории «${category}». О чём хотите узнать?`,
+  }];
+
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sc_chat_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return getDefaultWelcome();
+  });
+
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
 
   const bottomRef = useRef(null);
 
+  // Сохраняем в localStorage последние 20 сообщений для экономии места и токенов
+  useEffect(() => {
+    try {
+      localStorage.setItem('sc_chat_history', JSON.stringify(messages.slice(-20)));
+    } catch {}
+  }, [messages]);
+
   // Скролл вниз при новых сообщениях
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
+
+  const handleClearHistory = () => {
+    localStorage.removeItem('sc_chat_history');
+    setMessages(getDefaultWelcome());
+  };
 
   const handleSend = async (text) => {
     const userText = text.trim();
@@ -95,10 +117,44 @@ export default function ChatTab({ city = 'Москва', category = 'Студе�
     }
   };
 
-  const showSuggestions = messages.length === 1;
+  const showSuggestions = messages.length <= 1;
 
   return (
     <div className="chat-wrap">
+      <div style={{
+        display: 'flex',
+        justify: 'space-between',
+        alignItems: 'center',
+        padding: '8px 12px',
+        marginBottom: 8,
+        background: 'var(--card-bg, #F9FAFB)',
+        borderRadius: 10,
+        border: '1px solid var(--border-color, #E5E7EB)',
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main, #111827)' }}>
+          💬 Контекстный диалог с ИИ ({messages.length})
+        </span>
+        {messages.length > 1 && (
+          <button
+            onClick={handleClearHistory}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: '#EF4444',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+            title="Очистить историю диалога"
+          >
+            <Trash2 size={14} /> Очистить
+          </button>
+        )}
+      </div>
+
       <div className="chat-messages">
         {messages.map((m) => (
           <div
