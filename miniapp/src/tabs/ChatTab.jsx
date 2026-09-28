@@ -9,6 +9,31 @@ const SUGGESTIONS = [
   'Что бесплатно для льготников?',
 ];
 
+function renderFormattedText(text) {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+
+  return lines.map((line, lineIdx) => {
+    // Parse bold text **text**
+    const parts = line.split(/(\*\*.*?\*\*)/g);
+
+    const formattedLine = parts.map((part, partIdx) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return <strong key={partIdx}>{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+
+    return (
+      <React.Fragment key={lineIdx}>
+        {lineIdx > 0 && <br />}
+        {formattedLine}
+      </React.Fragment>
+    );
+  });
+}
+
 export default function ChatTab({ city = 'Москва', category = 'Студенты' }) {
   const [messages, setMessages] = useState([
     {
@@ -86,7 +111,7 @@ export default function ChatTab({ city = 'Москва', category = 'Студе�
               </div>
             )}
             <div className={`chat-bubble chat-bubble-${m.role}`}>
-              {m.text}
+              {renderFormattedText(m.text)}
             </div>
             {m.role === 'user' && (
               <div className="chat-avatar chat-avatar-user">
