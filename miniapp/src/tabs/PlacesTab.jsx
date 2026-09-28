@@ -13,7 +13,20 @@ export default function PlacesTab({
   city,
 }) {
   const [query, setQuery] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
+  const [viewMode, setViewModeState] = useState(() => {
+    try {
+      return localStorage.getItem('sc_places_view_mode') || 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  const setViewMode = (mode) => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem('sc_places_view_mode', mode);
+    } catch {}
+  };
 
   const filtered = useMemo(() => {
     let result = places;
