@@ -135,6 +135,7 @@ export default function PlaceDetail({
       <PlaceMap
         lat={place.lat}
         lng={place.lng}
+        points={place.points}
         address={place.address}
         title={place.title}
         city={place.city}

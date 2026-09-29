@@ -75,6 +75,7 @@ async def init_db():
                     ("place_type", "VARCHAR(64) NULL"),
                     ("promo_text", "VARCHAR(255) NULL"),
                     ("schedule", "VARCHAR(128) NULL"),
+                    ("points", "TEXT NULL"),
                 ]:
                     try:
                         await cur.execute(f"ALTER TABLE places ADD COLUMN {col_name} {col_type};")

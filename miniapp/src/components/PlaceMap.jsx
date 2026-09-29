@@ -74,7 +74,24 @@ function splitAddresses(address) {
     .filter(Boolean);
 }
 
+function readStoredPoints(place) {
+  let pts = place.points;
+  if (typeof pts === 'string') {
+    try {
+      pts = JSON.parse(pts);
+    } catch {
+      pts = [];
+    }
+  }
+  return (Array.isArray(pts) ? pts : [])
+    .filter((p) => p && p.lat && p.lng)
+    .map((p) => ({ coords: [parseFloat(p.lat), parseFloat(p.lng)], address: p.address }));
+}
+
 async function resolvePlacePoints(place, fallbackCity, cache) {
+  // 1. Координаты, посчитанные на сервере (scripts/geocode_places.py)
+  const stored = readStoredPoints(place);
+  if (stored.length > 0) return stored;
   if (place.lat && place.lng) {
     return [{ coords: [parseFloat(place.lat), parseFloat(place.lng)], address: place.address }];
   }
@@ -110,6 +127,7 @@ export default function PlaceMap({
   address,
   title,
   places = [],
+  points: detailPoints,
   city = 'Москва',
   onSelectPlace,
   height = '360px',
@@ -200,7 +218,7 @@ export default function PlaceMap({
           isCancelled
         );
       } else if (lat || lng || address) {
-        const points = await resolvePlacePoints({ lat, lng, address, city }, city, cache);
+        const points = await resolvePlacePoints({ lat, lng, address, city, points: detailPoints }, city, cache);
         if (cancelled) return;
         points.forEach(({ coords, address: pointAddress }) => {
           addMarker(
@@ -231,7 +249,7 @@ export default function PlaceMap({
       destroyMap();
       setMapLoaded(false);
     };
-  }, [lat, lng, address, title, places, city, zoom]);
+  }, [lat, lng, address, title, places, detailPoints, city, zoom]);
 
   return (
     <div style={{ marginTop: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-color, #E5E7EB)', position: 'relative' }}>

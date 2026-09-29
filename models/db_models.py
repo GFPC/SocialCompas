@@ -45,6 +45,7 @@ class Place(Base):
     schedule = Column(String(255), nullable=True)
     address = Column(String(255), nullable=True)
     map_url = Column(String(512), nullable=True)
+    points = Column(Text, nullable=True)  # JSON: [{lat, lng, address}]
     discount_info = Column(String(255), default="*Скидки и льготы предоставляются при предоставлении оригинала подтверждающего документа.")
 
     favorites = relationship("UserFavorite", back_populates="place", cascade="all, delete-orphan")
