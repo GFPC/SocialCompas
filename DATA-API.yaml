@@ -1,151 +1,177 @@
-# DATA-API.yaml — SocialCompass Data API Schema Specification
+# DATA-API.yaml — SocialCompass Data API & Verification Specification
 
-data_schema_version: "2.0.0"
-description: >
-  Официальное описание структуры и взаимосвязи сущностей данных SocialCompass
-  (Города, Категории благополучателей, Места и акции, Избранное, Профили пользователей, Состояния FSM).
+config_version: "2.0.0"
+solution_name: "SocialCompass"
+team_id: "GFPC / SocialCompass"
+base_url: "https://api.socialcompass.ru"
 
+# ─────────────────────────────────────────────────────────
+# Обязательные проверки работоспособности API
+# ─────────────────────────────────────────────────────────
+checks:
+  - id: check_cities
+    name: "Получение списка поддерживаемых городов"
+    endpoint: "/api/v1/cities"
+    method: "GET"
+    role: "guest"
+    parameters: {}
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "count"
+        - "items"
+      schema_example:
+        ok: true
+        count: 3
+        items:
+          - id: 1
+            name: "Москва"
+            is_active: 1
+
+  - id: check_categories
+    name: "Получение списка категорий благополучателей"
+    endpoint: "/api/v1/categories"
+    method: "GET"
+    role: "guest"
+    parameters: {}
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "count"
+        - "items"
+
+  - id: check_places_filtering
+    name: "Получение каталога мест с фильтрацией по городу и категории"
+    endpoint: "/api/v1/places"
+    method: "GET"
+    role: "guest"
+    parameters:
+      query:
+        city: "Москва"
+        category: "Студенты"
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "count"
+        - "items"
+
+  - id: check_place_detail
+    name: "Получение подробной карточки места по ID"
+    endpoint: "/api/v1/places/1"
+    method: "GET"
+    role: "guest"
+    parameters:
+      path:
+        place_id: 1
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "place"
+
+  - id: check_profile_by_user_id
+    name: "Синхронизация профиля по ID пользователя MAX Messenger"
+    endpoint: "/api/v1/profile/998877"
+    method: "GET"
+    role: "student"
+    parameters:
+      path:
+        user_id: "998877"
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "profile"
+
+  - id: check_unauthorized_favorites
+    name: "Ограничение неавторизованного доступа к избранному (401)"
+    endpoint: "/api/v1/favorites"
+    method: "GET"
+    role: "guest"
+    parameters: {}
+    expected_status_code: 401
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "detail"
+
+  - id: check_ai_chat
+    name: "Интеграция с ИИ-ассистентом с передачей контекста"
+    endpoint: "/api/v1/chat"
+    method: "POST"
+    role: "student"
+    parameters:
+      body:
+        messages:
+          - role: "user"
+            content: "Какие музеи со скидкой есть в Москве?"
+        city: "Москва"
+        category: "Студенты"
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "message"
+
+# ─────────────────────────────────────────────────────────
+# Схемы и сущности данных в БД (Data Schema)
+# ─────────────────────────────────────────────────────────
 entities:
   City:
     table_name: cities
     description: Каталог городов присутствия сервиса
     primary_key: id (INT, AUTO_INCREMENT)
     fields:
-      id:
-        type: integer
-        required: true
-        description: Идентификатор города
-      name:
-        type: string(64)
-        required: true
-        unique: true
-        description: Название города (например, Москва, Новосибирск, Санкт-Петербург)
-      is_active:
-        type: integer
-        default: 1
-        description: Флаг активности города (1 — активен, 0 — заблокирован)
-      created_at:
-        type: timestamp
-        default: CURRENT_TIMESTAMP
+      id: { type: integer, required: true }
+      name: { type: string(64), required: true, unique: true }
+      is_active: { type: integer, default: 1 }
 
   Category:
     table_name: categories
     description: Справочник льготных категорий благополучателей
     primary_key: id (INT, AUTO_INCREMENT)
     fields:
-      id:
-        type: integer
-        required: true
-        description: Идентификатор категории
-      name:
-        type: string(64)
-        required: true
-        unique: true
-        description: Название категории (Студенты, Пенсионеры, Участники СВО)
-      is_active:
-        type: integer
-        default: 1
-        description: Флаг активности категории
-      created_at:
-        type: timestamp
-        default: CURRENT_TIMESTAMP
+      id: { type: integer, required: true }
+      name: { type: string(64), required: true, unique: true }
+      is_active: { type: integer, default: 1 }
 
   Place:
     table_name: places
     description: Каталог партнерских мест, льгот и скидочных предложений
     primary_key: id (INT, AUTO_INCREMENT)
     fields:
-      id:
-        type: integer
-        required: true
-        description: Уникальный ID акции/места
-      city:
-        type: string(64)
-        required: true
-        description: Город привязки места
-      category:
-        type: string(64)
-        required: true
-        description: Категория льготников
-      title:
-        type: string(255)
-        required: true
-        description: Название заведения или акции
-      place_type:
-        type: string(64)
-        default: "Место"
-        description: Тип заведения (Музей, Театр, Аквапарк, Боулинг, Кофейня, Спорт)
-      promo_text:
-        type: text
-        required: true
-        description: Подробное описание скидки или условия бесплатного посещения
-      schedule:
-        type: string(255)
-        description: Режим работы и льготные часы
-      address:
-        type: string(255)
-        description: Физический адрес заведения
-      map_url:
-        type: string(255)
-        description: Ссылка на навигационную карту (Яндекс.Карты / 2ГИС)
-      discount_info:
-        type: string(255)
-        nullable: true
-        description: Дополнительная юридическая информация или дисклеймер
+      id: { type: integer, required: true }
+      city: { type: string(64), required: true }
+      category: { type: string(64), required: true }
+      title: { type: string(255), required: true }
+      place_type: { type: string(64), default: "Место" }
+      promo_text: { type: text, required: true }
+      schedule: { type: string(255) }
+      address: { type: string(255) }
+      map_url: { type: string(255) }
 
   UserProfile:
     table_name: user_profiles
     description: Сохраненный профиль пользователя (город и категория)
     primary_key: user_id (VARCHAR(64))
     fields:
-      user_id:
-        type: string(64)
-        required: true
-        description: Telegram/MAX ID пользователя
-      city:
-        type: string(64)
-        required: true
-        description: Выбранный город
-      category:
-        type: string(64)
-        required: true
-        description: Выбранная льготная категория
-      updated_at:
-        type: timestamp
-        default: CURRENT_TIMESTAMP
+      user_id: { type: string(64), required: true }
+      city: { type: string(64), required: true }
+      category: { type: string(64), required: true }
 
   UserFavorite:
     table_name: user_favorites
-    description: Связь «Пользователь — Избранное место» (Many-to-Many)
+    description: Связь «Пользователь — Избранное место»
     primary_key: id (INT, AUTO_INCREMENT)
-    unique_constraints:
-      - [user_id, place_id]
     fields:
-      id:
-        type: integer
-        required: true
-      user_id:
-        type: string(64)
-        required: true
-        description: Telegram/MAX ID пользователя
-      place_id:
-        type: integer
-        required: true
-        description: Ссылка на id из таблицы places
-      created_at:
-        type: timestamp
-        default: CURRENT_TIMESTAMP
-
-relationships:
-  - from: UserFavorite.place_id
-    to: Place.id
-    type: Many-to-One
-    description: Одно избранное место ссылается на одну запись в каталоге places
-
-  - from: UserProfile.city
-    to: City.name
-    type: Many-to-One
-
-  - from: UserProfile.category
-    to: Category.name
-    type: Many-to-One
+      user_id: { type: string(64), required: true }
+      place_id: { type: integer, required: true }
