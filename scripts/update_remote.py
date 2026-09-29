@@ -47,9 +47,9 @@ def run():
              f" && ln -sf /etc/nginx/sites-available/socialcompass /etc/nginx/sites-enabled/socialcompass"
              f" && nginx -t && systemctl reload nginx")
 
-    # 4. Stop + remove stale containers cleanly to avoid name conflicts
-    exec_cmd(client, "Docker Compose Down (clean stop)",
-             f"cd {PROJECT_DIR} && docker compose -f docker-compose.prod.yml down --remove-orphans",
+    # 4. Prune Docker build cache to avoid corrupted snapshot errors
+    exec_cmd(client, "Prune Docker build cache",
+             "docker builder prune -af",
              ignore_errors=True)
 
     # 5. Force-remove any zombie container with conflicting name
@@ -57,7 +57,7 @@ def run():
              "docker rm -f socialcompas_app 2>/dev/null || true",
              ignore_errors=True)
 
-    # 6. Build & start fresh
+    # 6. Build & start (legacy builder on server doesn't support --no-cache flag via compose)
     exec_cmd(client, "Docker Compose Build & Up",
              f"cd {PROJECT_DIR} && docker compose -f docker-compose.prod.yml up -d --build")
 
