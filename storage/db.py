@@ -236,15 +236,19 @@ async def save_user_profile(user_id: str, city: str, category: str):
             if user_id == "miniapp_user_1":
                 keys = await redis_client.keys("fsm:data:*")
                 for k in keys:
-                    uids_to_sync.append(k.replace("fsm:data:", ""))
+                    key_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+                    uids_to_sync.append(key_str.replace("fsm:data:", ""))
             for uid in set(uids_to_sync):
                 raw = await redis_client.get(f"fsm:data:{uid}")
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8")
                 data = json.loads(raw) if raw else {}
                 data["city"] = city
                 data["category"] = category
                 await redis_client.set(f"fsm:data:{uid}", json.dumps(data, ensure_ascii=False))
+                logger.info(f"[fsm.sync] Updated Redis fsm:data:{uid} -> city={city}, category={category}")
     except Exception as e:
-        logger.debug(f"Redis FSM sync error: {e}")
+        logger.warning(f"Redis FSM sync error: {e}")
 
 
 TEST_ACCOUNT_DEFAULTS = {
