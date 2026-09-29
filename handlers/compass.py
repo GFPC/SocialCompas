@@ -1,4 +1,6 @@
 import logging
+
+import config
 from typing import Any, Dict, List, Optional, Tuple
 
 from transport import BaseEvent, MessageEvent, CallbackEvent, BotStartedEvent
@@ -36,10 +38,17 @@ def get_category_keyboard() -> List[List[Dict[str, str]]]:
     ]
 
 
+def _miniapp_button(text: str, user_id: Optional[str] = None) -> Dict[str, str]:
+    """Native MAX Mini App button if the bot username is configured, else a plain link fallback."""
+    if config.MAX_BOT_USERNAME:
+        return {"text": text, "web_app": config.MAX_BOT_USERNAME}
+    url = f"https://socialcompass.ru/?user_id={user_id}" if user_id else "https://socialcompass.ru"
+    return {"text": text, "url": url}
+
+
 def get_main_menu_keyboard(user_id: Optional[str] = None) -> List[List[Dict[str, str]]]:
-    app_url = f"https://socialcompass.ru/?user_id={user_id}" if user_id else "https://socialcompass.ru"
     return [
-        [{"text": "📱 Открыть мини-приложение", "url": app_url}],
+        [_miniapp_button("📱 Открыть мини-приложение", user_id)],
         [{"text": "📍 Список мест и акций", "callback_data": "view_places"}],
         [{"text": "⭐ Избранное", "callback_data": "view_favorites"}],
         [{"text": "⚙️ Настройки профиля", "callback_data": "view_settings"}],
@@ -47,9 +56,8 @@ def get_main_menu_keyboard(user_id: Optional[str] = None) -> List[List[Dict[str,
 
 
 def get_settings_keyboard(user_id: Optional[str] = None) -> List[List[Dict[str, str]]]:
-    app_url = f"https://socialcompass.ru/?user_id={user_id}" if user_id else "https://socialcompass.ru"
     return [
-        [{"text": "📱 Настроить в мини-приложении", "url": app_url}],
+        [_miniapp_button("📱 Настроить в мини-приложении", user_id)],
         [{"text": "✏️ Изменить данные в боте", "callback_data": "edit_profile"}],
         [{"text": "🏠 В главное меню", "callback_data": "menu_main"}],
     ]

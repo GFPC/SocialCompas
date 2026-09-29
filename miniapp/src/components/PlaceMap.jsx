@@ -6,6 +6,13 @@ const CITY_CENTERS = {
   'Новосибирск': [55.0084, 82.9357],
 };
 
+const YMAPS_KEY = import.meta.env.VITE_YMAPS_KEY || '';
+const GEO_CACHE_KEY = 'sc_geocache_v1';
+const GEO_CONCURRENCY = 4;
+
+const esc = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
 function loadYandexMapsScript() {
   return new Promise((resolve, reject) => {
     if (window.ymaps) {
@@ -15,36 +22,86 @@ function loadYandexMapsScript() {
 
     const existingScript = document.getElementById('ymaps-script');
     if (existingScript) {
-      existingScript.addEventListener('load', () => {
-        window.ymaps.ready(resolve);
-      });
+      existingScript.addEventListener('load', () => window.ymaps.ready(resolve));
       existingScript.addEventListener('error', reject);
       return;
     }
 
     const script = document.createElement('script');
     script.id = 'ymaps-script';
-    script.src = 'https://api-maps.yandex.ru/2.1/?lang=ru_RU';
+    script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${YMAPS_KEY ? `&apikey=${YMAPS_KEY}` : ''}`;
     script.type = 'text/javascript';
     script.async = true;
-    script.onload = () => {
-      window.ymaps.ready(resolve);
-    };
+    script.onload = () => window.ymaps.ready(resolve);
     script.onerror = reject;
     document.head.appendChild(script);
   });
 }
 
-function getPlaceCoords(p, city, index = 0) {
-  if (p.lat && p.lng) {
-    return [parseFloat(p.lat), parseFloat(p.lng)];
+function readGeoCache() {
+  try {
+    return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}');
+  } catch {
+    return {};
   }
-  const targetCity = p.city || city;
-  const base = CITY_CENTERS[targetCity] || CITY_CENTERS[city] || CITY_CENTERS['Москва'];
-  const seed = (p.id || (index + 1)) * 37 + (p.title ? p.title.length : 7) * 19;
-  const latOffset = (((seed * 11) % 120) - 60) * 0.0012;
-  const lngOffset = (((seed * 23) % 120) - 60) * 0.0022;
-  return [base[0] + latOffset, base[1] + lngOffset];
+}
+
+function writeGeoCache(cache) {
+  try {
+    localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
+async function geocodeAddress(city, address, cache) {
+  const query = `${city}, ${address}`;
+  if (cache[query]) return cache[query];
+  try {
+    const res = await window.ymaps.geocode(query, { results: 1 });
+    const first = res.geoObjects.get(0);
+    const coords = first ? first.geometry.getCoordinates() : null;
+    if (coords) cache[query] = coords;
+    return coords;
+  } catch {
+    return null;
+  }
+}
+
+// У одного места может быть несколько адресов через «;» — у каждого своя метка.
+function splitAddresses(address) {
+  return String(address || '')
+    .split(/[;\n]+/)
+    .map((a) => a.trim())
+    .filter(Boolean);
+}
+
+async function resolvePlacePoints(place, fallbackCity, cache) {
+  if (place.lat && place.lng) {
+    return [{ coords: [parseFloat(place.lat), parseFloat(place.lng)], address: place.address }];
+  }
+  const city = place.city || fallbackCity;
+  const points = [];
+  for (const address of splitAddresses(place.address)) {
+    const coords = await geocodeAddress(city, address, cache);
+    if (coords) points.push({ coords, address });
+  }
+  return points;
+}
+
+async function runLimited(items, worker, limit, isCancelled) {
+  let next = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length && !isCancelled()) {
+      const i = next++;
+      await worker(items[i], i);
+    }
+  });
+  await Promise.all(runners);
+}
+
+function presetFor(type) {
+  if (type === 'Музей') return 'islands#violetIcon';
+  if (type === 'Зоопарк') return 'islands#greenIcon';
+  return 'islands#blueIcon';
 }
 
 export default function PlaceMap({
@@ -62,138 +119,119 @@ export default function PlaceMap({
   const mapInstanceRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Определяем подходящий масштаб: 15 для конкретного места, 13 для списка по городу
-  const targetZoom = zoom || (lat && lng ? 15 : 13);
-
   useEffect(() => {
-    let isMounted = true;
+    let cancelled = false;
+    const isCancelled = () => cancelled;
 
-    loadYandexMapsScript()
-      .then(() => {
-        if (!isMounted || !mapContainerRef.current) return;
-        initMap();
-        if (isMounted) setMapLoaded(true);
-      })
-      .catch((err) => {
-        console.error('Yandex Maps API load error:', err);
-      });
-
-    return () => {
-      isMounted = false;
+    const destroyMap = () => {
       if (mapInstanceRef.current) {
         try {
           mapInstanceRef.current.destroy();
-        } catch {
-        }
+        } catch {}
         mapInstanceRef.current = null;
       }
+    };
+
+    const fitToMarkers = (map, count) => {
+      if (count === 0) return;
+      if (count === 1) {
+        map.setCenter(map.geoObjects.get(0).geometry.getCoordinates(), zoom || 15);
+        return;
+      }
+      map
+        .setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 })
+        .then(() => {
+          if (map.getZoom() > 16) map.setZoom(16);
+        })
+        .catch(() => {});
+    };
+
+    const addMarker = (map, coords, properties, options, onClick) => {
+      const placemark = new window.ymaps.Placemark(coords, properties, options);
+      if (onClick) placemark.events.add('click', onClick);
+      map.geoObjects.add(placemark);
+    };
+
+    const init = async () => {
+      await loadYandexMapsScript();
+      if (cancelled || !mapContainerRef.current) return;
+      destroyMap();
+
+      const cache = readGeoCache();
+      const baseCenter = CITY_CENTERS[city] || CITY_CENTERS['Москва'];
+      const map = new window.ymaps.Map(
+        mapContainerRef.current,
+        { center: baseCenter, zoom: zoom || 11, controls: ['zoomControl', 'fullscreenControl'] },
+        { suppressMapOpenBlock: true }
+      );
+      mapInstanceRef.current = map;
+      setMapLoaded(true);
+
+      let markerCount = 0;
+
+      if (places.length > 0) {
+        await runLimited(
+          places,
+          async (p) => {
+            const points = await resolvePlacePoints(p, city, cache);
+            if (cancelled) return;
+            points.forEach(({ coords, address: pointAddress }) => {
+              const body = `
+                <div style="font-size: 12px; color: #374151; margin-top: 4px;">
+                  ${p.place_type ? `<div style="color: #4F46E5; font-weight: 600; font-size: 11px;">${esc(p.place_type)}</div>` : ''}
+                  ${p.promo_text ? `<div style="color: #059669; font-weight: 600; margin-top: 4px;">🏷️ ${esc(p.promo_text)}</div>` : ''}
+                  ${pointAddress ? `<div style="color: #6B7280; margin-top: 4px; font-size: 11px;">📍 ${esc(pointAddress)}</div>` : ''}
+                </div>`;
+              addMarker(
+                map,
+                coords,
+                {
+                  hintContent: esc(p.title),
+                  balloonContentHeader: `<div style="font-weight: bold; font-size: 14px; color: #111827;">${esc(p.title)}</div>`,
+                  balloonContentBody: body,
+                },
+                { preset: presetFor(p.place_type) },
+                onSelectPlace ? () => onSelectPlace(p) : null
+              );
+              markerCount += 1;
+            });
+          },
+          GEO_CONCURRENCY,
+          isCancelled
+        );
+      } else if (lat || lng || address) {
+        const points = await resolvePlacePoints({ lat, lng, address, city }, city, cache);
+        if (cancelled) return;
+        points.forEach(({ coords, address: pointAddress }) => {
+          addMarker(
+            map,
+            coords,
+            {
+              hintContent: esc(title || 'Место'),
+              balloonContentHeader: `<div style="font-weight: bold; font-size: 14px; color: #111827;">${esc(title || 'Место')}</div>`,
+              balloonContentBody: pointAddress
+                ? `<div style="font-size: 12px; color: #4B5563; margin-top: 4px;">📍 ${esc(pointAddress)}</div>`
+                : '',
+            },
+            { preset: 'islands#redIcon' }
+          );
+          markerCount += 1;
+        });
+      }
+
+      if (cancelled) return;
+      writeGeoCache(cache);
+      fitToMarkers(map, markerCount);
+    };
+
+    init().catch((err) => console.error('Yandex Maps error:', err));
+
+    return () => {
+      cancelled = true;
+      destroyMap();
       setMapLoaded(false);
     };
   }, [lat, lng, address, title, places, city, zoom]);
-
-  const initMap = () => {
-    if (!window.ymaps || !mapContainerRef.current) return;
-
-    if (mapInstanceRef.current) {
-      try {
-        mapInstanceRef.current.destroy();
-      } catch {
-      }
-      mapInstanceRef.current = null;
-    }
-
-    let center = CITY_CENTERS[city] || [55.7558, 37.6173];
-    if (lat && lng) {
-      center = [parseFloat(lat), parseFloat(lng)];
-    } else if (places.length > 0) {
-      center = getPlaceCoords(places[0], city, 0);
-    }
-
-    const map = new window.ymaps.Map(
-      mapContainerRef.current,
-      {
-        center,
-        zoom: targetZoom,
-        controls: ['zoomControl', 'fullscreenControl'],
-      },
-      {
-        suppressMapOpenBlock: true,
-      }
-    );
-
-    mapInstanceRef.current = map;
-
-    const geoObjects = [];
-
-    if (places && places.length > 0) {
-      places.forEach((p, idx) => {
-        const [pLat, pLng] = getPlaceCoords(p, city, idx);
-
-        const balloonContentHeader = `<div style="font-weight: bold; font-size: 14px; color: #111827;">${p.title}</div>`;
-        const balloonContentBody = `
-          <div style="font-size: 12px; color: #374151; margin-top: 4px;">
-            ${p.place_type ? `<div style="color: #4F46E5; font-weight: 600; font-size: 11px;">${p.place_type}</div>` : ''}
-            ${p.promo_text ? `<div style="color: #059669; font-weight: 600; margin-top: 4px;">🏷️ ${p.promo_text}</div>` : ''}
-            ${p.address ? `<div style="color: #6B7280; margin-top: 4px; font-size: 11px;">📍 ${p.address}</div>` : ''}
-          </div>
-        `;
-
-        const placemark = new window.ymaps.Placemark(
-          [pLat, pLng],
-          {
-            hintContent: p.title,
-            balloonContentHeader,
-            balloonContentBody,
-          },
-          {
-            preset: p.place_type === 'Музей' ? 'islands#violetIcon' : (p.place_type === 'Зоопарк' ? 'islands#greenIcon' : 'islands#blueIcon'),
-          }
-        );
-
-        if (onSelectPlace) {
-          placemark.events.add('click', () => {
-            onSelectPlace(p);
-          });
-        }
-
-        map.geoObjects.add(placemark);
-        geoObjects.push(placemark);
-      });
-
-      if (geoObjects.length > 0) {
-        // Устанавливаем границы меток, но ограничиваем zoom от отдаления на весь мир (минимум 12, максимум 15)
-        map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 })
-          .then(() => {
-            if (map.getZoom() < 12) {
-              map.setZoom(12);
-            } else if (map.getZoom() > 15) {
-              map.setZoom(15);
-            }
-          })
-          .catch(() => {
-            map.setCenter(center, targetZoom);
-          });
-      }
-    } else if (lat || lng || address) {
-      const pLat = lat ? parseFloat(lat) : center[0];
-      const pLng = lng ? parseFloat(lng) : center[1];
-
-      const placemark = new window.ymaps.Placemark(
-        [pLat, pLng],
-        {
-          hintContent: title || 'Место',
-          balloonContentHeader: `<div style="font-weight: bold; font-size: 14px; color: #111827;">${title || 'Место'}</div>`,
-          balloonContentBody: address ? `<div style="font-size: 12px; color: #4B5563; margin-top: 4px;">📍 ${address}</div>` : '',
-        },
-        {
-          preset: 'islands#redIcon',
-        }
-      );
-
-      map.geoObjects.add(placemark);
-      map.setCenter([pLat, pLng], 15);
-    }
-  };
 
   return (
     <div style={{ marginTop: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-color, #E5E7EB)', position: 'relative' }}>

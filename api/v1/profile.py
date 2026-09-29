@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from storage.db import get_user_profile, save_user_profile
 from core.auth import get_current_user
@@ -39,8 +39,6 @@ async def get_profile_by_id(user_id: str):
     Возвращает профиль конкретного пользователя по user_id (для MiniApp/MAX Bot).
     """
     profile = await get_user_profile(user_id)
-    if not profile:
-        return {"ok": True, "profile": {"city": "Москва", "category": "Студенты"}}
     return {"ok": True, "profile": profile}
 
 
@@ -48,11 +46,12 @@ async def get_profile_by_id(user_id: str):
 @router.post("/")
 async def update_profile_general(req: ProfileUpdateRequest):
     """
-    Сохраняет профиль по переданному user_id или дефолтному пользователю.
+    Сохраняет профиль по переданному user_id (MAX user id из initData).
     """
-    target_user_id = req.user_id or "miniapp_user_1"
-    await save_user_profile(target_user_id, req.city, req.category)
-    return {"ok": True, "message": "Профиль успешно сохранен", "user_id": target_user_id}
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id обязателен")
+    await save_user_profile(req.user_id, req.city, req.category)
+    return {"ok": True, "message": "Профиль успешно сохранен", "user_id": req.user_id}
 
 
 @router.post("/{user_id}")

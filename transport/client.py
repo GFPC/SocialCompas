@@ -65,12 +65,18 @@ class MaxBotTransport:
             for row in keyboard:
                 max_row = []
                 for btn in row:
-                    btn_type = "link" if "url" in btn else "callback"
+                    if "web_app" in btn:
+                        btn_type = "open_app"
+                    else:
+                        btn_type = "link" if "url" in btn else "callback"
                     item = {
                         "type": btn_type,
                         "text": btn.get("text", ""),
                     }
-                    if btn_type == "link":
+                    if btn_type == "open_app":
+                        # Native MAX Mini App button: opens inside MAX and provides window.WebApp.initData
+                        item["web_app"] = btn["web_app"]
+                    elif btn_type == "link":
                         item["url"] = btn.get("url", "")
                     else:
                         item["payload"] = btn.get("callback_data", btn.get("text", ""))

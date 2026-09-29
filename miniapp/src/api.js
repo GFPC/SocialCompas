@@ -52,12 +52,12 @@ export async function removeFavorite(userId, placeId) {
 // профиль
 export async function fetchProfile(userId) {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/profile/${userId}`);
-    if (!res.ok) return null;
+    const res = await fetch(`${API_BASE}/api/v1/profile/${encodeURIComponent(userId)}`);
+    if (!res.ok) return undefined;
     const data = await res.json();
-    return data.profile || data;
+    return data.profile ?? null; // null — у пользователя ещё нет профиля
   } catch {
-    return null;
+    return undefined; // ошибка сети
   }
 }
 

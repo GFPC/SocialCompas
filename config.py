@@ -10,6 +10,8 @@ else:
     load_dotenv()
 
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "YOUR_MAX_BOT_TOKEN_HERE")
+# Public username of the bot that owns the Mini App (used by the native open_app button)
+MAX_BOT_USERNAME = os.getenv("MAX_BOT_USERNAME", "").strip().lstrip("@")
 MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api2.max.ru").rstrip("/")
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() in ("true", "1", "t", "yes")
 

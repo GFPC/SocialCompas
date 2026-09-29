@@ -16,68 +16,51 @@ import ChatTab from './tabs/ChatTab';
 import FavoritesTab from './tabs/FavoritesTab';
 import ProfileTab from './tabs/ProfileTab';
 
-const extractUserFromStr = (raw) => {
+const parseInitDataUserId = (raw) => {
   if (!raw) return null;
   try {
-    const clean = raw.startsWith('#') || raw.startsWith('?') ? raw.substring(1) : raw;
-    const params = new URLSearchParams(clean);
-    const directId = params.get('user_id') || params.get('id');
-    if (directId) return directId;
-
-    const initDataStr = params.get('tgWebAppData') || params.get('initData') || params.get('maxWebAppData') || clean;
-    if (initDataStr && initDataStr.includes('user=')) {
-      const inner = new URLSearchParams(initDataStr);
-      const userRaw = inner.get('user');
-      if (userRaw) {
-        const parsed = JSON.parse(decodeURIComponent(userRaw));
-        if (parsed?.id) return String(parsed.id);
-      }
+    const userRaw = new URLSearchParams(raw).get('user');
+    if (userRaw) {
+      const parsed = JSON.parse(userRaw);
+      if (parsed?.id) return String(parsed.id);
     }
   } catch {}
   return null;
 };
 
+// MAX кладёт данные пользователя в window.WebApp.initData / initDataUnsafe.user.id —
+// это тот же id, что и в боте. Всё остальное — запасные варианты для браузера/отладки.
 const getUserId = () => {
   try {
-    // 1. Check window.location.search and hash
-    const fromSearch = extractUserFromStr(window.location.search);
-    if (fromSearch) {
-      localStorage.setItem('sc_user_id', fromSearch);
-      return fromSearch;
-    }
-    const fromHash = extractUserFromStr(window.location.hash);
-    if (fromHash) {
-      localStorage.setItem('sc_user_id', fromHash);
-      return fromHash;
+    const webApp = window.WebApp;
+    const id =
+      webApp?.initDataUnsafe?.user?.id ||
+      parseInitDataUserId(webApp?.initData) ||
+      parseInitDataUserId(window.Telegram?.WebApp?.initData);
+    if (id) {
+      localStorage.setItem('sc_user_id', String(id));
+      return String(id);
     }
 
-    // 2. Telegram / MAX WebApp SDK objects
-    const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (tgId) {
-      localStorage.setItem('sc_user_id', String(tgId));
-      return String(tgId);
-    }
-    const tgInitData = window.Telegram?.WebApp?.initData;
-    if (tgInitData) {
-      const parsedFromInit = extractUserFromStr(tgInitData);
-      if (parsedFromInit) {
-        localStorage.setItem('sc_user_id', parsedFromInit);
-        return parsedFromInit;
-      }
+    const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const fromUrl =
+      new URLSearchParams(window.location.search).get('user_id') ||
+      hashParams.get('user_id') ||
+      parseInitDataUserId(hashParams.get('WebAppData') || hashParams.get('tgWebAppData'));
+    if (fromUrl) {
+      localStorage.setItem('sc_user_id', fromUrl);
+      return fromUrl;
     }
 
-    // 3. MAX Messenger globals
-    const maxId = window.MaxWebApp?.user?.id || window.Max?.user?.id || window.MAX?.user?.id;
-    if (maxId) {
-      localStorage.setItem('sc_user_id', String(maxId));
-      return String(maxId);
-    }
-
-    // 4. Saved in localStorage
     const saved = localStorage.getItem('sc_user_id');
     if (saved) return saved;
+
+    // Открыто вне MAX (обычный браузер): локальный гостевой id, без синхронизации с ботом
+    const guest = 'guest_' + Math.random().toString(36).slice(2, 12);
+    localStorage.setItem('sc_user_id', guest);
+    return guest;
   } catch {}
-  return 'miniapp_user_1';
+  return 'guest_local';
 };
 
 export default function App() {
@@ -120,22 +103,51 @@ export default function App() {
     }
   }, [city, category, isSurveyDone, userId]);
 
-  useEffect(() => {
-    const activeUid = getUserId();
-    if (activeUid !== userId) {
-      setUserId(activeUid);
+  // Профиль на сервере — источник правды: подтягиваем при старте, при возврате в приложение
+  // и периодически, чтобы изменения из бота появлялись без перезапуска.
+  const syncProfile = useCallback(async (uid) => {
+    const p = await fetchProfile(uid);
+    if (p === undefined) return; // сеть/сервер недоступны — оставляем локальное состояние
+    if (p?.city && p?.category) {
+      setCity((c) => (c === p.city ? c : p.city));
+      setCategory((c) => (c === p.category ? c : p.category));
+      localStorage.setItem('sc_city', p.city);
+      localStorage.setItem('sc_category', p.category);
+      localStorage.setItem('sc_survey_done', 'true');
+      setIsSurveyDone(true);
+    } else {
+      // у этого пользователя ещё нет профиля — показываем опрос
+      localStorage.removeItem('sc_survey_done');
+      setIsSurveyDone(false);
     }
-    fetchProfile(activeUid).then((p) => {
-      if (p?.city && p?.category) {
-        setCity(p.city);
-        setCategory(p.category);
-        localStorage.setItem('sc_city', p.city);
-        localStorage.setItem('sc_category', p.category);
-        localStorage.setItem('sc_survey_done', 'true');
-        setIsSurveyDone(true);
-      }
-    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    try {
+      window.WebApp?.ready?.();
+    } catch {}
+    const activeUid = getUserId();
+    if (activeUid !== userId) setUserId(activeUid);
+    syncProfile(activeUid);
+  }, []);
+
+  useEffect(() => {
+    if (!userId || isEditMode) return undefined;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        syncProfile(userId);
+        loadFavorites();
+      }
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    const timer = setInterval(refresh, 20000);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+      clearInterval(timer);
+    };
+  }, [userId, isEditMode, syncProfile]);
 
   const loadPlaces = async () => {
     setLoading(true);
@@ -194,12 +206,8 @@ export default function App() {
     localStorage.setItem('sc_survey_done', 'true');
     setIsSurveyDone(true);
     setIsEditMode(false);
-    try {
-      await saveProfile(activeUid, newCity, newCategory);
-      showToast('Профиль сохранён');
-    } catch (e) {
-      console.error(e);
-    }
+    const saved = await saveProfile(activeUid, newCity, newCategory);
+    showToast(saved ? 'Профиль сохранён' : 'Не удалось синхронизировать с ботом');
   };
 
   // Фильтр
