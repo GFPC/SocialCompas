@@ -29,3 +29,8 @@ scripts/discount_scraper.py
 scripts/scraped_discounts.json
 scripts/run_check.py
 scripts/check_db.py
+
+# Local deploy tooling (never commit credentials)
+scripts/update_remote.py
+.env.deploy
+*.local.py
