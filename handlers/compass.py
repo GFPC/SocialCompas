@@ -80,6 +80,26 @@ def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str = "", la
     ]
 
 
+async def get_effective_user_profile(user_id: Optional[str], ctx: FSMContext) -> Tuple[str, str]:
+    """
+    Получает самый свежий профиль (город и категорию) из БД или FSM с немедленной синхронизацией.
+    """
+    profile = await get_user_profile(user_id) if user_id else None
+    fsm_data = await ctx.get_data()
+
+    if profile and profile.get("city") and profile.get("category"):
+        city = profile["city"]
+        category = profile["category"]
+    else:
+        city = fsm_data.get("city", "Москва")
+        category = fsm_data.get("category", "Студенты")
+
+    if fsm_data.get("city") != city or fsm_data.get("category") != category:
+        await ctx.update_data(city=city, category=category)
+
+    return city, category
+
+
 # --- Event Handling ---
 
 async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state: Optional[str]) -> Tuple[str, List[List[Dict[str, str]]]]:
@@ -98,13 +118,10 @@ async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state:
             )
             return msg, get_city_keyboard()
 
-    data = await ctx.get_data()
     user_id = event.user_id if hasattr(event, "user_id") else None
-    profile = await get_user_profile(user_id) if user_id else None
+    city, category = await get_effective_user_profile(user_id, ctx)
 
-    city = profile["city"] if profile else data.get("city", "Москва")
-    category = profile["category"] if profile else data.get("category", "Студенты")
-
+    data = await ctx.get_data()
     chat_history = data.get("chat_history", [])
     chat_history.append({"role": "user", "content": text})
 
@@ -155,10 +172,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
 
     # 4. View Places List
     if data == "view_places":
-        profile = await get_user_profile(user_id)
-        fsm_data = await ctx.get_data()
-        city = profile["city"] if profile else fsm_data.get("city", "Москва")
-        category = profile["category"] if profile else fsm_data.get("category", "Студенты")
+        city, category = await get_effective_user_profile(user_id, ctx)
 
         places = await get_places_by_filter(city, category)
         await ctx.set_state(SocialCompasSG.PLACES_LIST)
@@ -239,10 +253,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
     # 8. Settings Screen
     if data == "view_settings":
         await ctx.set_state(SocialCompasSG.SETTINGS)
-        profile = await get_user_profile(user_id)
-        fsm_data = await ctx.get_data()
-        city = profile["city"] if profile else fsm_data.get("city", "Не выбран")
-        category = profile["category"] if profile else fsm_data.get("category", "Не выбрана")
+        city, category = await get_effective_user_profile(user_id, ctx)
 
         msg = (
             "⚙️ **Настройки профиля**\n\n"

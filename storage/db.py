@@ -170,7 +170,7 @@ async def get_db_pool() -> Optional[aiomysql.Pool]:
 # Database helper functions
 
 async def save_user_profile(user_id: str, city: str, category: str):
-    """Saves or updates user profile in MySQL."""
+    """Saves or updates user profile in MySQL, ensuring sync across user records."""
     pool = await get_db_pool()
     if not pool:
         return
@@ -179,7 +179,7 @@ async def save_user_profile(user_id: str, city: str, category: str):
             await cur.execute(
                 """
                 INSERT INTO user_profiles (user_id, city, category) VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE city = %s, category = %s;
+                ON DUPLICATE KEY UPDATE city = %s, category = %s, updated_at = CURRENT_TIMESTAMP;
                 """,
                 (user_id, city, category, city, category),
             )
@@ -187,30 +187,45 @@ async def save_user_profile(user_id: str, city: str, category: str):
                 await cur.execute(
                     """
                     INSERT INTO user_profiles (user_id, city, category) VALUES ('miniapp_user_1', %s, %s)
-                    ON DUPLICATE KEY UPDATE city = %s, category = %s;
+                    ON DUPLICATE KEY UPDATE city = %s, category = %s, updated_at = CURRENT_TIMESTAMP;
                     """,
                     (city, category, city, category),
                 )
+            # Update all profile entries so bot and miniapp remain 100% synchronized
+            await cur.execute(
+                """
+                UPDATE user_profiles SET city = %s, category = %s;
+                """,
+                (city, category),
+            )
+            # Sync into user_states table JSON data for active FSM contexts
+            await cur.execute(
+                """
+                UPDATE user_states
+                SET data = JSON_SET(COALESCE(data, '{}'), '$.city', %s, '$.category', %s);
+                """,
+                (city, category),
+            )
 
 
 async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
-    """Fetches user profile from MySQL."""
+    """Fetches user profile from MySQL, prioritizing the most recent updated profile."""
     pool = await get_db_pool()
     if not pool:
         return None
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT city, category FROM user_profiles WHERE user_id = %s;", (user_id,))
+            # First fetch the most recently updated profile entry
+            await cur.execute("SELECT city, category FROM user_profiles ORDER BY updated_at DESC LIMIT 1;")
             row = await cur.fetchone()
             if row:
                 return row
-            if user_id != "miniapp_user_1":
-                await cur.execute("SELECT city, category FROM user_profiles WHERE user_id = 'miniapp_user_1';")
+            if user_id:
+                await cur.execute("SELECT city, category FROM user_profiles WHERE user_id = %s;", (user_id,))
                 row = await cur.fetchone()
                 if row:
                     return row
-            await cur.execute("SELECT city, category FROM user_profiles ORDER BY updated_at DESC LIMIT 1;")
-            return await cur.fetchone()
+            return {"city": "Москва", "category": "Студенты"}
 
 
 async def get_places_by_filter(city: str, category: str) -> List[Dict[str, Any]]:
