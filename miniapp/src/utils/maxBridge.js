@@ -51,24 +51,51 @@ export function bindBackButton(handler) {
   };
 }
 
+// Публичное имя бота (менять нельзя): нужно для ссылок вида https://max.ru/<bot>?startapp=<данные>
+export const BOT_USERNAME = import.meta.env.VITE_MAX_BOT_USERNAME || 't294_hakaton_max_bot';
+
+/** Ссылка, открывающая мини-приложение сразу на карточке места (получатель увидит её через start_param). */
+export const placeDeepLink = (placeId) => `https://max.ru/${BOT_USERNAME}?startapp=place_${placeId}`;
+
+/** Разбирает start_param запуска: 'place_123' → 123, иначе null. */
+export function getStartPlaceId() {
+  const raw = bridge()?.initDataUnsafe?.start_param;
+  const m = /^place_(\d+)$/.exec(String(raw || ''));
+  return m ? Number(m[1]) : null;
+}
+
 /**
- * Вызывает нативный диалог «Поделиться» MAX (в чат MAX / системный). Возвращает true, если вызов сделан
- * (метод моста есть). Асинхронные отказы моста логируются и не роняют приложение.
+ * Нативный экран «Поделиться» MAX (выбор чата/контакта). Документация:
+ *  - shareMaxContent({text, link}) — все платформы, открывает интерфейс отправки внутри MAX;
+ *  - shareContent({text, link}) — системный диалог, только iOS/Android.
+ * Оба возвращают Promise и работают только сразу после клика пользователя — поэтому вызывать
+ * нужно синхронно из обработчика клика. Возвращает { ok, method } либо { ok: false, reason }.
  */
-export function shareViaMax({ text, link }) {
+export async function shareViaMax({ text, link }) {
   const b = bridge();
-  const method = b?.shareMaxContent ? 'shareMaxContent' : b?.shareContent ? 'shareContent' : null;
-  if (!method) return false;
-  try {
-    const result = b[method]({ text, link });
-    if (result && typeof result.catch === 'function') {
-      result.catch((err) => console.warn(`[MAX bridge] ${method} failed`, err));
-    }
-    return true;
-  } catch (err) {
-    console.warn(`[MAX bridge] ${method} threw`, err);
-    return false;
+  if (!b) return { ok: false, reason: 'no-bridge' };
+
+  const attempts = [];
+  if (b.shareMaxContent) {
+    attempts.push(['shareMaxContent', { text, link }]);
+    // запасной формат: всё одним текстом (на случай, если клиент не принимает пару text+link)
+    attempts.push(['shareMaxContent', { text: [text, link].filter(Boolean).join('\n') }]);
   }
+  if (b.shareContent) attempts.push(['shareContent', { text, link }]);
+  if (attempts.length === 0) return { ok: false, reason: 'no-share-method' };
+
+  let lastError = null;
+  for (const [method, params] of attempts) {
+    try {
+      await b[method](params);
+      return { ok: true, method };
+    } catch (err) {
+      lastError = err;
+      console.warn(`[MAX bridge] ${method} failed`, err);
+    }
+  }
+  const reason = String(lastError?.message || lastError?.error || lastError || 'unknown').slice(0, 60);
+  return { ok: false, reason };
 }
 
 /** Открывает внешнюю ссылку средствами MAX, если возможно. */

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  fetchPlaces, fetchFavorites, addFavorite, removeFavorite,
+  fetchPlaces, fetchPlaceDetail, fetchFavorites, addFavorite, removeFavorite,
   saveProfile, fetchProfile,
 } from './api';
-import { notifyReady, haptic, hapticSelect, bindBackButton, isInsideMax } from './utils/maxBridge';
+import {
+  notifyReady, haptic, hapticSelect, bindBackButton, isInsideMax, getStartPlaceId,
+} from './utils/maxBridge';
 
 import TopBar from './components/TopBar';
 import BottomNav from './components/BottomNav';
@@ -193,6 +195,20 @@ export default function App() {
       haptic('success');
     }
   };
+
+  // Открыли по ссылке «Поделиться» (https://max.ru/<бот>?startapp=place_<id>): показываем это место
+  const startPlaceHandled = useRef(false);
+  useEffect(() => {
+    if (startPlaceHandled.current || !isSurveyDone || isEditMode) return;
+    const placeId = getStartPlaceId();
+    if (!placeId) return;
+    startPlaceHandled.current = true;
+    fetchPlaceDetail(placeId)
+      .then((data) => {
+        if (data?.place) setSelectedPlace(data.place);
+      })
+      .catch(() => showToast('Не удалось открыть место по ссылке'));
+  }, [isSurveyDone, isEditMode, showToast]);
 
   // Нативная кнопка «Назад» MAX закрывает карточку места (и прячется на главных экранах)
   useEffect(() => {

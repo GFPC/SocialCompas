@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { getPlaceImage } from '../utils/placeImages';
 import PlaceMap from './PlaceMap';
-import { shareViaMax } from '../utils/maxBridge';
+import { shareViaMax, placeDeepLink } from '../utils/maxBridge';
 
 const CATEGORY_EMOJI = {
   // Категории пользователей
@@ -80,33 +80,41 @@ export default function PlaceDetail({
   const emoji = getEmoji(place);
 
   const handleShare = async () => {
-    // Название — первой строкой один раз; остальные строки без повторов названия
+    // Сообщение: название один раз, дальше акция, адрес и сайт (без повторов названия)
     const title = String(place.title || '').trim();
-    const rest = [place.promo_text, place.address]
+    const site = place.map_url && /^https?:\/\//.test(place.map_url) ? place.map_url : '';
+    const rest = [place.promo_text, place.address ? `📍 ${place.address}` : '', site]
       .filter(Boolean)
       .map((line) => String(line).trim())
       .filter((line) => line && line.toLowerCase() !== title.toLowerCase());
-    const text = [title, ...rest].filter(Boolean).join('\n');
-    const link = place.map_url && /^https?:\/\//.test(place.map_url) ? place.map_url : undefined;
+    const text = [`🧭 ${title}`, ...rest].join('\n');
 
-    // 1. Нативный диалог MAX (или системный share вне моста) — сразу, пока действует жест пользователя.
-    //    Исход не гарантирован (в части клиентов MAX вызов ничего не показывает), поэтому п. 2 выполняется всегда.
-    let dialogRequested = shareViaMax({ text, link });
-    if (!dialogRequested && navigator.share) {
+    // Ссылка открывает мини-приложение сразу на этом месте (start_param), а не просто сайт
+    const link = placeDeepLink(place.id);
+
+    // 1. Нативный экран MAX «Поделиться» (выбор чата). Вызывается сразу из клика — MAX проверяет жест.
+    const shared = await shareViaMax({ text, link });
+    if (shared.ok) return;
+
+    // 2. Вне MAX: системный share браузера
+    if (navigator.share) {
       try {
-        // title не передаём: название уже первая строка text, иначе системный диалог покажет его дважды
         await navigator.share({ text, url: link });
-        dialogRequested = true;
+        return;
       } catch {
-        // пользователь закрыл диалог или share недоступен — остаётся копирование
+        // закрыт диалог или недоступен — остаётся копирование
       }
     }
 
-    // 2. Копирование в буфер с видимой обратной связью — работает везде
-    const copied = await copyToClipboard(link ? `${text}\n${link}` : text);
+    // 3. Запасной вариант: копирование с понятным сообщением
+    const copied = await copyToClipboard(`${text}\n${link}`);
     if (copied) {
-      showToast?.('Скопировано в буфер обмена');
-    } else if (!dialogRequested) {
+      showToast?.(
+        shared.reason && shared.reason !== 'no-bridge'
+          ? `Не удалось открыть выбор чата (${shared.reason}). Ссылка скопирована`
+          : 'Ссылка скопирована в буфер обмена'
+      );
+    } else {
       showToast?.('Не удалось поделиться');
     }
   };
