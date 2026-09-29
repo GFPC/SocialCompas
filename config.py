@@ -36,3 +36,6 @@ AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1")
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 CHAT_RATE_LIMIT_PER_MINUTE = int(os.getenv("CHAT_RATE_LIMIT_PER_MINUTE", "10"))
 
+# Documentation (Swagger/ReDoc) flag - disabled by default on production
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "false").lower() in ("true", "1", "t", "yes")
+

@@ -20,10 +20,17 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
+docs_url = "/docs" if config.ENABLE_DOCS else None
+redoc_url = "/redoc" if config.ENABLE_DOCS else None
+openapi_url = "/openapi.json" if config.ENABLE_DOCS else None
+
 app = FastAPI(
     title="SocialCompas Unified Backend API & MAX Bot",
     version="2.0.0",
-    description="Unified backend providing REST API for MiniApp and Webhook/Polling for MAX Messenger Bot."
+    description="Unified backend providing REST API for MiniApp and Webhook/Polling for MAX Messenger Bot.",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
 )
 
 # Enable CORS for MiniApp frontend
