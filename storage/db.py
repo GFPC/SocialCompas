@@ -216,8 +216,16 @@ async def save_user_profile(user_id: str, city: str, category: str):
                         """,
                         (city, category, latest_uid),
                     )
+                    await cur.execute(
+                        """
+                        UPDATE user_states
+                        SET data = JSON_SET(COALESCE(data, '{}'), '$.city', %s, '$.category', %s)
+                        WHERE user_id = %s;
+                        """,
+                        (city, category, latest_uid),
+                    )
 
-            # 3. Sync MySQL user_states table
+            # 3. Sync MySQL user_states table for the direct user_id
             await cur.execute(
                 """
                 UPDATE user_states

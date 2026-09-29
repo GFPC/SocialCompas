@@ -116,10 +116,17 @@ async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state:
     text = event.text if isinstance(event, MessageEvent) else "/start"
     text = text.strip()
 
+    user_id = event.user_id if hasattr(event, "user_id") else None
+
     if text.startswith("/") or not current_state:
         cmd = text.split()[0].lower() if text.startswith("/") else "/start"
 
-        if cmd in ("/start", "/menu"):
+        if cmd == "/menu":
+            city, category = await get_effective_user_profile(user_id, ctx)
+            await ctx.set_state(SocialCompasSG.MAIN_MENU)
+            return f"🏠 **Главное меню Социального Компаса** ({city}, {category}):", get_main_menu_keyboard(user_id)
+
+        if cmd == "/start" or not current_state:
             await ctx.set_state(SocialCompasSG.SELECT_CITY)
             msg = (
                 "👋 **Добро пожаловать в чат-бот «Социальный компас».**\n\n"
@@ -128,7 +135,6 @@ async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state:
             )
             return msg, get_city_keyboard()
 
-    user_id = event.user_id if hasattr(event, "user_id") else None
     city, category = await get_effective_user_profile(user_id, ctx)
 
     data = await ctx.get_data()
@@ -141,11 +147,11 @@ async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state:
         chat_history.append({"role": "assistant", "content": ai_reply})
         # Сохраняем последние 10 сообщений в истории FSM для контроля токенов
         await ctx.update_data(chat_history=chat_history[-10:], city=city, category=category)
-        return ai_reply, get_main_menu_keyboard()
+        return ai_reply, get_main_menu_keyboard(user_id)
     except Exception as exc:
         logger.error(f"AI response failed in bot: {exc}")
         msg = f"🤖 Ваш профиль: **{city}** (**{category}**). Задайте любой вопрос или воспользуйтесь меню:"
-        return msg, get_main_menu_keyboard()
+        return msg, get_main_menu_keyboard(user_id)
 
 
 async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_state: Optional[str]) -> Tuple[str, List[List[Dict[str, str]]]]:
@@ -173,7 +179,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
             "**Благодарю за ответы!** Вы сможете изменить их позже в настройках.\n"
             "Интересные места и акции уже ждут вас."
         )
-        return msg, get_main_menu_keyboard()
+        return msg, get_main_menu_keyboard(user_id)
 
     # 3. Main menu navigation
     if data == "menu_main":
@@ -190,7 +196,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
 
         if not places:
             msg = f"📍 В городе **{city}** для категории **{category}** места пока не найдены."
-            return msg, get_main_menu_keyboard()
+            return msg, get_main_menu_keyboard(user_id)
 
         msg = f"📍 **Список мест и акций в г. {city} ({category})**:\n\n**Выберите место, которое планируете посетить:**"
         return msg, get_places_list_keyboard(places)
@@ -201,7 +207,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
             place_id = int(data.replace("place_", ""))
             place = await get_place_by_id(place_id)
             if not place:
-                return "⚠️ Место не найдено.", get_main_menu_keyboard()
+                return "⚠️ Место не найдено.", get_main_menu_keyboard(user_id)
 
             await ctx.set_state(SocialCompasSG.PLACE_DETAIL)
             is_fav = await is_favorite(user_id, place_id)
@@ -256,7 +262,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
 
         if not favs:
             msg = "⭐ **Ваши сохраненные места**\n\nУ вас пока нет добавленных мест в избранное."
-            return msg, get_main_menu_keyboard()
+            return msg, get_main_menu_keyboard(user_id)
 
         msg = "⭐ **Ваши сохраненные места**:\n\n**Выберите место для просмотра:**"
         return msg, get_places_list_keyboard(favs)
@@ -280,4 +286,4 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
         msg = "✏️ **Изменение профиля**\n\n**Выберите ваш новый город:**"
         return msg, get_city_keyboard()
 
-    return "Выберите действие из меню:", get_main_menu_keyboard()
+    return "Выберите действие из меню:", get_main_menu_keyboard(user_id)

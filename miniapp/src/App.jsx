@@ -80,9 +80,8 @@ const getUserId = () => {
   return 'miniapp_user_1';
 };
 
-const USER_ID = getUserId();
-
 export default function App() {
+  const [userId, setUserId] = useState(() => getUserId());
   const [activeTab, setActiveTab] = useState('places');
   const [city, setCity] = useState(localStorage.getItem('sc_city') || 'Москва');
   const [category, setCategory] = useState(localStorage.getItem('sc_category') || 'Студенты');
@@ -119,10 +118,14 @@ export default function App() {
       loadPlaces();
       loadFavorites();
     }
-  }, [city, category, isSurveyDone]);
+  }, [city, category, isSurveyDone, userId]);
 
   useEffect(() => {
-    fetchProfile(USER_ID).then((p) => {
+    const activeUid = getUserId();
+    if (activeUid !== userId) {
+      setUserId(activeUid);
+    }
+    fetchProfile(activeUid).then((p) => {
       if (p?.city && p?.category) {
         setCity(p.city);
         setCategory(p.category);
@@ -149,7 +152,8 @@ export default function App() {
 
   const loadFavorites = async () => {
     try {
-      const data = await fetchFavorites(USER_ID);
+      const activeUid = userId || getUserId();
+      const data = await fetchFavorites(activeUid);
       setFavorites(data.items || []);
     } catch (e) {
       console.error(e);
@@ -158,11 +162,12 @@ export default function App() {
 
   const handleToggleFavorite = async (place) => {
     const isFav = favorites.some((f) => f.id === place.id);
+    const activeUid = userId || getUserId();
     try {
       if (isFav) {
-        await removeFavorite(USER_ID, place.id);
+        await removeFavorite(activeUid, place.id);
       } else {
-        await addFavorite(USER_ID, place.id);
+        await addFavorite(activeUid, place.id);
       }
     } catch (e) {
       console.warn('API ошибка, обновляю локально', e);
@@ -179,6 +184,8 @@ export default function App() {
   const handleRemoveFavorite = (place) => handleToggleFavorite(place);
 
   const handleFinishSurvey = async (newCity, newCategory) => {
+    const activeUid = getUserId();
+    setUserId(activeUid);
     setCity(newCity);
     setCategory(newCategory);
     setSelectedTypes([]);
@@ -188,7 +195,7 @@ export default function App() {
     setIsSurveyDone(true);
     setIsEditMode(false);
     try {
-      await saveProfile(USER_ID, newCity, newCategory);
+      await saveProfile(activeUid, newCity, newCategory);
       showToast('Профиль сохранён');
     } catch (e) {
       console.error(e);
