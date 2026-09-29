@@ -57,6 +57,20 @@ export default function ChatTab({ city = 'Москва', category = 'Студе�
 
   const bottomRef = useRef(null);
 
+  // Обновляем приветственное сообщение если сменился город или категория
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0].id === 'welcome') {
+        return getDefaultWelcome();
+      }
+      // Обновляем только первое системное приветствие, сохраняя историю диалога
+      if (prev.length > 0 && prev[0].id === 'welcome') {
+        return [getDefaultWelcome()[0], ...prev.slice(1)];
+      }
+      return prev;
+    });
+  }, [city, category]);
+
   // Сохраняем в localStorage последние 20 сообщений для экономии места и токенов
   useEffect(() => {
     try {

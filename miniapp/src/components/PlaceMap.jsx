@@ -72,7 +72,7 @@ export default function PlaceMap({
       .then(() => {
         if (!isMounted || !mapContainerRef.current) return;
         initMap();
-        setMapLoaded(true);
+        if (isMounted) setMapLoaded(true);
       })
       .catch((err) => {
         console.error('Yandex Maps API load error:', err);
@@ -87,6 +87,7 @@ export default function PlaceMap({
         }
         mapInstanceRef.current = null;
       }
+      setMapLoaded(false);
     };
   }, [lat, lng, address, title, places, city, zoom]);
 

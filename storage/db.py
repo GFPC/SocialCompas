@@ -296,11 +296,6 @@ async def add_favorite(user_id: str, place_id: int):
                 "INSERT IGNORE INTO user_favorites (user_id, place_id) VALUES (%s, %s);",
                 (user_id, place_id),
             )
-            if user_id != "miniapp_user_1":
-                await cur.execute(
-                    "INSERT IGNORE INTO user_favorites (user_id, place_id) VALUES ('miniapp_user_1', %s);",
-                    (place_id,),
-                )
 
 
 async def remove_favorite(user_id: str, place_id: int):
@@ -311,13 +306,13 @@ async def remove_favorite(user_id: str, place_id: int):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "DELETE FROM user_favorites WHERE (user_id = %s OR user_id = 'miniapp_user_1') AND place_id = %s;",
+                "DELETE FROM user_favorites WHERE user_id = %s AND place_id = %s;",
                 (user_id, place_id),
             )
 
 
 async def get_user_favorites(user_id: str) -> List[Dict[str, Any]]:
-    """Gets user favorite places."""
+    """Gets user favorite places (only for the specific user)."""
     pool = await get_db_pool()
     if not pool:
         return []
@@ -327,8 +322,8 @@ async def get_user_favorites(user_id: str) -> List[Dict[str, Any]]:
                 """
                 SELECT p.* FROM places p
                 JOIN user_favorites f ON p.id = f.place_id
-                WHERE f.user_id = %s OR f.user_id = 'miniapp_user_1'
-                GROUP BY p.id;
+                WHERE f.user_id = %s
+                ORDER BY f.created_at DESC;
                 """,
                 (user_id,),
             )
@@ -343,7 +338,7 @@ async def is_favorite(user_id: str, place_id: int) -> bool:
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "SELECT 1 FROM user_favorites WHERE (user_id = %s OR user_id = 'miniapp_user_1') AND place_id = %s;",
+                "SELECT 1 FROM user_favorites WHERE user_id = %s AND place_id = %s;",
                 (user_id, place_id),
             )
             row = await cur.fetchone()
