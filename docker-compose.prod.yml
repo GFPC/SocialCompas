@@ -41,14 +41,15 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: socialcompas_db
       MYSQL_USER: bot_user
-      MYSQL_PASSWORD: bot_password
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bot_password}
     volumes:
       - mysql_prod_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 90s   # первая инициализация БД может занимать 1-2 минуты
     networks:
       - app_net
 

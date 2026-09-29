@@ -124,3 +124,30 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         raise HTTPException(status_code=401, detail="Недействительный или просроченный токен авторизации")
 
     return user_id
+
+
+GUEST_PREFIX = "guest_"
+
+
+def authorize_user_access(user_id: str, credentials: Optional[HTTPAuthorizationCredentials]) -> str:
+    """
+    Ensures the caller may act on `user_id` data: the Bearer token (issued by /auth/webapp after
+    verifying MAX initData) must belong to exactly this user. `guest_*` ids are anonymous browser
+    sessions outside MAX (no real account, nothing to protect) and need no token.
+    """
+    user_id = str(user_id)
+    if user_id.startswith(GUEST_PREFIX):
+        return user_id
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Требуется авторизация (Authorization: Bearer <token>)")
+    token_uid = verify_user_token(credentials.credentials)
+    if not token_uid:
+        raise HTTPException(status_code=401, detail="Недействительный или просроченный токен авторизации")
+    if token_uid != user_id:
+        raise HTTPException(status_code=403, detail="Доступ к данным другого пользователя запрещён")
+    return user_id
+
+
+async def get_path_user(user_id: str, credentials: Optional[HTTPAuthorizationCredentials] = Security(security)) -> str:
+    """FastAPI dependency for routes of the form /.../{user_id}/...: authorizes access to that user."""
+    return authorize_user_access(user_id, credentials)

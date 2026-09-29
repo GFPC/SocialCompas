@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getPlaceImage } from '../utils/placeImages';
 import PlaceMap from './PlaceMap';
+import { shareViaMax } from '../utils/maxBridge';
 
 const CATEGORY_EMOJI = {
   // Категории пользователей
@@ -54,20 +55,26 @@ export default function PlaceDetail({
   const emoji = getEmoji(place);
 
   const handleShare = async () => {
-    const text = `${place.title}\n${place.promo_text || ''}\n${place.address || ''}`;
+    const text = [place.title, place.promo_text, place.address].filter(Boolean).join('\n');
+    const link = place.map_url && /^https?:\/\//.test(place.map_url) ? place.map_url : undefined;
 
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast?.('Скопировано в буфер');
-    } catch {
-      showToast?.('Не удалось скопировать');
-    }
+    // 1. Нативный диалог MAX (отправить в чат MAX / системный share)
+    if (shareViaMax({ text, link })) return;
 
+    // 2. Вне MAX: системный share браузера, иначе копирование в буфер
     if (navigator.share) {
       try {
-        await navigator.share({ title: place.title, text });
-      } catch (e) {
+        await navigator.share({ title: place.title, text, url: link });
+        return;
+      } catch {
+        // пользователь закрыл диалог — переходим к копированию
       }
+    }
+    try {
+      await navigator.clipboard.writeText(link ? `${text}\n${link}` : text);
+      showToast?.('Скопировано в буфер');
+    } catch {
+      showToast?.('Не удалось поделиться');
     }
   };
 

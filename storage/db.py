@@ -1,9 +1,11 @@
+import asyncio
 import json
 import logging
 import aiomysql
 from typing import Any, Dict, List, Optional
 
 import config
+from .catalog import parse_excel_rows, import_catalog
 
 logger = logging.getLogger("storage.db")
 _db_pool: Optional[aiomysql.Pool] = None
@@ -15,15 +17,24 @@ async def init_db():
     """
     global _db_pool
     try:
-        _db_pool = await aiomysql.create_pool(
-            host=config.MYSQL_HOST,
-            port=config.MYSQL_PORT,
-            user=config.MYSQL_USER,
-            password=config.MYSQL_PASSWORD,
-            db=config.MYSQL_DB,
-            autocommit=True,
-            maxsize=10,
-        )
+        # MySQL may still be starting (cold `docker compose up`): retry for ~1 minute before giving up
+        for attempt in range(1, 21):
+            try:
+                _db_pool = await aiomysql.create_pool(
+                    host=config.MYSQL_HOST,
+                    port=config.MYSQL_PORT,
+                    user=config.MYSQL_USER,
+                    password=config.MYSQL_PASSWORD,
+                    db=config.MYSQL_DB,
+                    autocommit=True,
+                    maxsize=10,
+                )
+                break
+            except Exception as exc:
+                if attempt == 20:
+                    raise
+                logger.info(f"MySQL not ready ({exc}); retry {attempt}/20 in 3s")
+                await asyncio.sleep(3)
         logger.info(f"Connected to MySQL database '{config.MYSQL_DB}' at {config.MYSQL_HOST}:{config.MYSQL_PORT}")
 
         async with _db_pool.acquire() as conn:
@@ -55,15 +66,16 @@ async def init_db():
                         city VARCHAR(64) NOT NULL,
                         category VARCHAR(64) NOT NULL,
                         title VARCHAR(255) NOT NULL,
-                        description TEXT NOT NULL,
-                        map_url VARCHAR(255) NOT NULL,
+                        description TEXT NULL,
+                        map_url VARCHAR(512) NULL,
                         discount_info VARCHAR(255) DEFAULT '*Скидки и льготы предоставляются при предоставлении оригинала подтверждающего документа.',
                         address VARCHAR(255) NULL,
                         lat DOUBLE NULL,
                         lng DOUBLE NULL,
                         place_type VARCHAR(64) NULL,
-                        promo_text VARCHAR(255) NULL,
-                        schedule VARCHAR(128) NULL
+                        promo_text TEXT NULL,
+                        schedule VARCHAR(255) NULL,
+                        points TEXT NULL
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """)
 
@@ -79,6 +91,18 @@ async def init_db():
                 ]:
                     try:
                         await cur.execute(f"ALTER TABLE places ADD COLUMN {col_name} {col_type};")
+                    except Exception:
+                        pass
+
+                # Widen columns of tables created by older versions (idempotent, never narrows)
+                for ddl in (
+                    "ALTER TABLE places MODIFY description TEXT NULL",
+                    "ALTER TABLE places MODIFY promo_text TEXT NULL",
+                    "ALTER TABLE places MODIFY map_url VARCHAR(512) NULL",
+                    "ALTER TABLE places MODIFY schedule VARCHAR(255) NULL",
+                ):
+                    try:
+                        await cur.execute(ddl)
                     except Exception:
                         pass
 
@@ -121,7 +145,15 @@ async def init_db():
                 await cur.execute("SELECT COUNT(*) FROM places;")
                 count = (await cur.fetchone())[0]
                 if count == 0:
-                    await _seed_places(cur)
+                    # First run: load the real catalog from data/*.xlsx; only if the files are missing
+                    # fall back to a tiny set of SIMULATED demo places (see _seed_places).
+                    rows = parse_excel_rows()
+                    if rows:
+                        await import_catalog(cur, rows)
+                        logger.info(f"Imported {len(rows)} places from data/*.xlsx")
+                    else:
+                        logger.warning("data/*.xlsx not found - seeding SIMULATED demo places")
+                        await _seed_places(cur)
 
         logger.info("MySQL tables & initial seed initialized successfully.")
     except Exception as exc:
@@ -130,6 +162,7 @@ async def init_db():
 
 
 async def _seed_places(cur):
+    """SIMULATED demo data (fictional descriptions, placeholder map links). Used only when data/*.xlsx is absent."""
     sample_places = [
         # Москва - Студенты
         ("Москва", "Студенты", "Третьяковская галерея", "Главный музей национального искусства России. Шедевры живописи и скульптуры.", "https://yandex.ru/maps/-/CCUBb4hQ~C", "Студентам очной формы — скидка 50% по студенческому билету.", "г. Москва, Лаврушинский пер., 10", 55.7415, 37.6208, "Музей", "Скидка 50% студентам очникам", "Вт-Вс: 10:00 - 20:00"),

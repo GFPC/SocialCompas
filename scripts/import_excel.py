@@ -1,108 +1,41 @@
+"""Reloads the places catalog from data/*.xlsx (DELETES all places and, via FK cascade, users' favorites).
+
+    docker exec socialcompas_app python scripts/import_excel.py
+
+The catalog is also imported automatically on the first start with an empty database.
+After a re-import place ids change and map points must be recomputed (this script does it).
+"""
+import asyncio
 import os
 import sys
-import openpyxl
-import asyncio
+
 import aiomysql
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
-# Add root directory to sys.path
-BASE_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
 import config
-
-EXCEL_FILES = [
-    os.path.join(BASE_DIR, "data", "БД акции по городам.xlsx"),
-    os.path.join(BASE_DIR, "data", "Санкт-Петербург.xlsx"),
-    r"C:\Users\greg\Downloads\БД акции по городам.xlsx",
-    r"C:\Users\greg\Downloads\Санкт-Петербург.xlsx",
-]
+from storage.catalog import parse_excel_rows, import_catalog, geocode_missing_places
 
 
-async def import_excel_data():
+async def main():
+    rows = parse_excel_rows()
+    if not rows:
+        sys.exit("Не найдены файлы data/*.xlsx")
     pool = await aiomysql.create_pool(
-        host=config.MYSQL_HOST,
-        port=config.MYSQL_PORT,
-        user=config.MYSQL_USER,
-        password=config.MYSQL_PASSWORD,
-        db=config.MYSQL_DB,
-        autocommit=True,
+        host=config.MYSQL_HOST, port=config.MYSQL_PORT, user=config.MYSQL_USER,
+        password=config.MYSQL_PASSWORD, db=config.MYSQL_DB, autocommit=True,
     )
-
-    total_imported = 0
-    processed_paths = set()
-
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            # Clear old places data
-            await cur.execute("DELETE FROM places;")
-
-            insert_query = """
-                INSERT INTO places (city, category, title, place_type, promo_text, schedule, address, map_url)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-            """
-
-            for file_path in EXCEL_FILES:
-                if not os.path.exists(file_path):
-                    continue
-
-                filename = os.path.basename(file_path)
-                if filename in processed_paths:
-                    continue
-                processed_paths.add(filename)
-
-                print(f"📦 Импорт данных из Excel: {file_path}")
-                wb = openpyxl.load_workbook(file_path)
-                sheet = wb.active
-                rows = list(sheet.iter_rows(values_only=True))[1:]
-
-                file_count = 0
-                for row in rows:
-                    if not row or not row[0] or not row[2]:
-                        continue
-
-                    raw_city = str(row[0]).strip()
-                    city_lower = raw_city.lower()
-                    if "петербург" in city_lower or "спб" in city_lower:
-                        city = "Санкт-Петербург"
-                    elif "новосибирск" in city_lower:
-                        city = "Новосибирск"
-                    elif "москва" in city_lower:
-                        city = "Москва"
-                    else:
-                        city = raw_city
-
-                    raw_cat = str(row[1]).strip() if row[1] else "Все"
-                    cat_lower = raw_cat.lower()
-                    if "студент" in cat_lower:
-                        category = "Студенты"
-                    elif "пенсион" in cat_lower:
-                        category = "Пенсионеры"
-                    elif "сво" in cat_lower or "участник" in cat_lower:
-                        category = "Участники СВО"
-                    else:
-                        category = raw_cat
-
-                    title = str(row[2]).strip()
-                    place_type = str(row[3]).strip() if len(row) > 3 and row[3] else "Место"
-                    promo_text = str(row[4]).strip() if len(row) > 4 and row[4] else ""
-                    schedule = str(row[5]).strip() if len(row) > 5 and row[5] else ""
-                    address = str(row[6]).strip() if len(row) > 6 and row[6] else ""
-                    map_url = str(row[7]).strip() if len(row) > 7 and row[7] else "https://max.ru"
-
-                    await cur.execute(insert_query, (
-                        city, category, title, place_type, promo_text, schedule, address, map_url
-                    ))
-                    file_count += 1
-
-                total_imported += file_count
-                print(f"  -> Добавлено {file_count} записей из {filename}")
-
+            n = await import_catalog(cur, rows, replace=True)
+    print(f"Импортировано записей: {n}")
+    stats = await geocode_missing_places(pool)
+    print(f"Метки на карте: {stats}")
     pool.close()
     await pool.wait_closed()
-    print(f"\n🎉 Всего успешно импортировано {total_imported} записей мест и акций в MySQL!")
 
 
 if __name__ == "__main__":
-    asyncio.run(import_excel_data())
+    asyncio.run(main())

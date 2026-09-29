@@ -191,14 +191,26 @@ def run_profile_sync_tests(client: TestClient, token: str):
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 1. Save profile via MiniApp (POST /profile without JWT, with user_id)
-    res = client.post("/api/v1/profile", json={"user_id": "998877", "city": "Санкт-Петербург", "category": "Пенсионеры"})
+    # 1. Save profile via MiniApp (POST /profile with the user's own token)
+    res = client.post("/api/v1/profile", headers=headers,
+                      json={"user_id": "998877", "city": "Санкт-Петербург", "category": "Пенсионеры"})
     assert res.status_code == 200
     assert res.json()["ok"] is True
-    print("[OK] Test 1: MiniApp POST /profile (anonymous) → 200 saved")
+    print("[OK] Test 1: MiniApp POST /profile (own token) → 200 saved")
+
+    # 1b. Same request without a token / with someone else's token / for a guest id
+    body = {"user_id": "998877", "city": "Москва", "category": "Студенты"}
+    assert client.post("/api/v1/profile", json=body).status_code == 401
+    other = make_valid_token(client, 554433)
+    assert client.post("/api/v1/profile", json=body, headers={"Authorization": f"Bearer {other}"}).status_code == 403
+    assert client.post("/api/v1/profile", json={**body, "user_id": "guest_abc123"}).status_code == 200
+    assert client.post("/api/v1/profile", json={"city": "Москва", "category": "Студенты"}).status_code == 400
+    print("[OK] Test 1b: POST /profile without token → 401, foreign token → 403, guest → 200, no user_id → 400")
 
     # 2. Read back the same profile via GET /profile/{user_id}
-    res = client.get("/api/v1/profile/998877")
+    assert client.get("/api/v1/profile/998877").status_code == 401
+    assert client.get("/api/v1/profile/998877", headers={"Authorization": f"Bearer {other}"}).status_code == 403
+    res = client.get("/api/v1/profile/998877", headers=headers)
     assert res.status_code == 200
     p = res.json()["profile"]
     # In DB mode: city/category should be exactly what was saved
@@ -278,7 +290,7 @@ def run_places_tests(client: TestClient):
         assert res3.status_code == 404
         print("[OK] Test 4: GET /places/999999 → 404 Not Found")
     else:
-        print("[SKIP] Tests 2-4: No places in DB yet (run import_excel.py first)")
+        print("[SKIP] Tests 2-4: No places in DB (start the Docker stack: the catalog is imported on first run)")
 
     print()
 
@@ -300,30 +312,38 @@ def run_favorites_isolation_tests(client: TestClient):
         return
 
     place_id = items[0]["id"]
-    user_a = "test_user_A_isolation"
-    user_b = "test_user_B_isolation"
+    user_a, user_b = "9000001", "9000002"
+    ha = {"Authorization": f"Bearer {make_valid_token(client, int(user_a))}"}
+    hb = {"Authorization": f"Bearer {make_valid_token(client, int(user_b))}"}
 
     # Add place to user A's favorites
-    res = client.post(f"/api/v1/favorites/{user_a}/{place_id}")
+    res = client.post(f"/api/v1/favorites/{user_a}/{place_id}", headers=ha)
     assert res.status_code == 200
     print(f"[OK] Test 1: Added place {place_id} to User A favorites")
 
     # User A should see it
-    res = client.get(f"/api/v1/favorites/{user_a}")
+    res = client.get(f"/api/v1/favorites/{user_a}", headers=ha)
     fav_ids_a = [p["id"] for p in res.json()["items"]]
     assert place_id in fav_ids_a
     print("[OK] Test 2: User A can see their favorite")
 
     # User B should NOT see User A's favorites
-    res = client.get(f"/api/v1/favorites/{user_b}")
+    res = client.get(f"/api/v1/favorites/{user_b}", headers=hb)
     fav_ids_b = [p["id"] for p in res.json()["items"]]
     assert place_id not in fav_ids_b, "User B should not see User A's favorites!"
     print("[OK] Test 3: User B does NOT see User A's favorites (isolation correct)")
 
+    # User B must not be able to read or modify User A's favorites, nor anonymous callers
+    assert client.get(f"/api/v1/favorites/{user_a}", headers=hb).status_code == 403
+    assert client.post(f"/api/v1/favorites/{user_a}/{place_id}", headers=hb).status_code == 403
+    assert client.delete(f"/api/v1/favorites/{user_a}/{place_id}", headers=hb).status_code == 403
+    assert client.get(f"/api/v1/favorites/{user_a}").status_code == 401
+    print("[OK] Test 3b: Foreign token → 403, no token → 401 on another user's favorites")
+
     # Remove from User A
-    res = client.delete(f"/api/v1/favorites/{user_a}/{place_id}")
+    res = client.delete(f"/api/v1/favorites/{user_a}/{place_id}", headers=ha)
     assert res.status_code == 200
-    res = client.get(f"/api/v1/favorites/{user_a}")
+    res = client.get(f"/api/v1/favorites/{user_a}", headers=ha)
     fav_ids_after = [p["id"] for p in res.json()["items"]]
     assert place_id not in fav_ids_after
     print("[OK] Test 4: Removed from User A favorites — correctly gone")

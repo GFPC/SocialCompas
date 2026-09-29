@@ -2,7 +2,9 @@ import asyncio
 import argparse
 import logging
 import sys
+from pathlib import Path
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -46,6 +48,36 @@ app.add_middleware(
 app.include_router(v1_router)
 
 transport = MaxBotTransport()
+
+MINIAPP_DIST = Path(__file__).parent / "miniapp" / "dist"
+
+
+_background_tasks = set()
+
+
+def start_background_geocoding():
+    """Compute map points for places that have none yet, without blocking start-up (OSM Nominatim, ~1 req/s)."""
+    from storage.catalog import geocode_missing_places
+
+    async def _run():
+        pool = await get_db_pool()
+        if not pool:
+            return
+        try:
+            await geocode_missing_places(pool)
+        except Exception as exc:
+            logger.warning(f"Background geocoding failed: {exc}")
+
+    task = asyncio.get_running_loop().create_task(_run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+def mount_miniapp():
+    """Serve the built MiniApp (Docker image) from the same origin as the API. Must run after all routes are registered."""
+    if MINIAPP_DIST.is_dir():
+        app.mount("/", StaticFiles(directory=MINIAPP_DIST, html=True), name="miniapp")
+        logger.info(f"MiniApp static files are served from {MINIAPP_DIST}")
 
 
 async def setup_fsm_storage():
@@ -113,6 +145,7 @@ def main():
     else:
         async def run_bot_and_api():
             await init_db()
+            start_background_geocoding()
             storage = await setup_fsm_storage()
             dp = Dispatcher(transport=transport, storage=storage)
 
@@ -121,6 +154,8 @@ def main():
                 update = await request.json()
                 await dp.feed_update(update)
                 return {"ok": True}
+
+            mount_miniapp()  # last: a "/" mount would shadow routes registered after it
 
             if args.webhook:
                 logger.info(f"Запуск Webhook сервера и REST API на http://{config.HOST}:{config.PORT}")

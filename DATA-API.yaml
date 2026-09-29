@@ -6,6 +6,29 @@ team_id: "GFPC / SocialCompass"
 base_url: "https://api.socialcompass.ru"
 
 # ─────────────────────────────────────────────────────────
+# Авторизация тестовых ролей
+# Данные пользователя (профиль, избранное) доступны только владельцу: Bearer-токен должен
+# принадлежать тому же user_id, иначе 403. Токены НЕ хранятся в репозитории — значения
+# TOKEN_STUDENT / TOKEN_PENSIONER указаны на служебном (первом) слайде презентации.
+# Токен можно получить и самостоятельно: POST /api/v1/auth/webapp с init_data, подписанным
+# токеном бота (алгоритм: https://dev.max.ru/docs/webapps/validation).
+# ─────────────────────────────────────────────────────────
+auth:
+  scheme: "Bearer"
+  header: "Authorization: Bearer <token>"
+  roles:
+    guest:
+      description: "Без токена (публичный каталог)"
+    student:
+      user_id: "998877"
+      token: "${TOKEN_STUDENT}"
+      accounts_file: "data/test_accounts.json"
+    pensioner:
+      user_id: "554433"
+      token: "${TOKEN_PENSIONER}"
+      accounts_file: "data/test_accounts.json"
+
+# ─────────────────────────────────────────────────────────
 # Обязательные проверки работоспособности API
 # ─────────────────────────────────────────────────────────
 checks:
@@ -63,12 +86,13 @@ checks:
 
   - id: check_place_detail
     name: "Получение подробной карточки места по ID"
-    endpoint: "/api/v1/places/1"
+    # id 4004 существует в боевой БД (id задаются при импорте каталога; актуальный список — в ответе /api/v1/places)
+    endpoint: "/api/v1/places/4004"
     method: "GET"
     role: "guest"
     parameters:
       path:
-        place_id: 1
+        place_id: 4004
     expected_status_code: 200
     expected_response_format:
       content_type: "application/json"
@@ -81,6 +105,8 @@ checks:
     endpoint: "/api/v1/profile/998877"
     method: "GET"
     role: "student"
+    headers:
+      Authorization: "Bearer ${TOKEN_STUDENT}"
     parameters:
       path:
         user_id: "998877"
@@ -97,6 +123,68 @@ checks:
     method: "GET"
     role: "guest"
     parameters: {}
+    expected_status_code: 401
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "detail"
+
+  - id: check_profile_requires_token
+    name: "Профиль пользователя недоступен без токена (401)"
+    endpoint: "/api/v1/profile/998877"
+    method: "GET"
+    role: "guest"
+    parameters:
+      path:
+        user_id: "998877"
+    expected_status_code: 401
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "detail"
+
+  - id: check_foreign_token_forbidden
+    name: "Токен другого пользователя не даёт доступ к чужому профилю (403)"
+    endpoint: "/api/v1/profile/998877"
+    method: "GET"
+    role: "pensioner"
+    headers:
+      Authorization: "Bearer ${TOKEN_PENSIONER}"
+    parameters:
+      path:
+        user_id: "998877"
+    expected_status_code: 403
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "detail"
+
+  - id: check_favorites_by_user
+    name: "Избранное владельца по user_id"
+    endpoint: "/api/v1/favorites/998877"
+    method: "GET"
+    role: "student"
+    headers:
+      Authorization: "Bearer ${TOKEN_STUDENT}"
+    parameters:
+      path:
+        user_id: "998877"
+    expected_status_code: 200
+    expected_response_format:
+      content_type: "application/json"
+      mandatory_fields:
+        - "ok"
+        - "count"
+        - "items"
+
+  - id: check_tampered_init_data
+    name: "Подделанный initData отклоняется (401)"
+    endpoint: "/api/v1/auth/webapp"
+    method: "POST"
+    role: "guest"
+    parameters:
+      body:
+        init_data: "auth_date=1000000&user=%7B%22id%22%3A1%7D&hash=fakehash"
     expected_status_code: 401
     expected_response_format:
       content_type: "application/json"

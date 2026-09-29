@@ -12,6 +12,10 @@ else:
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "YOUR_MAX_BOT_TOKEN_HERE")
 # Public username of the bot that owns the Mini App (used by the native open_app button)
 MAX_BOT_USERNAME = os.getenv("MAX_BOT_USERNAME", "").strip().lstrip("@")
+# TLS trust for the MAX API: its certificate is issued by the Russian Trusted Root CA, which is not
+# in the default certifi bundle, so the public root certificate is shipped in certs/ and added to it.
+MAX_CA_BUNDLE = os.getenv("MAX_CA_BUNDLE", str(Path(__file__).parent / "certs" / "russian_trusted_root_ca.pem"))
+MAX_TLS_INSECURE = os.getenv("MAX_TLS_INSECURE", "false").lower() in ("true", "1", "t", "yes")  # debug only
 MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api2.max.ru").rstrip("/")
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() in ("true", "1", "t", "yes")
 

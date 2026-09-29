@@ -40,7 +40,7 @@ services:
     networks:
       - app_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/cities"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/cities', timeout=4)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -51,10 +51,10 @@ services:
     container_name: socialcompas_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: rootpassword   # тестовое значение для локального стенда
       MYSQL_DATABASE: socialcompas_db
       MYSQL_USER: bot_user
-      MYSQL_PASSWORD: bot_password
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bot_password}
     ports:
       - "3307:3306"
     volumes:
@@ -63,7 +63,8 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 90s   # первая инициализация БД может занимать 1-2 минуты
     networks:
       - app_net
 

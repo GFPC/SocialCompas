@@ -37,3 +37,8 @@ scripts/check_db.py
 scripts/run_check.py
 scripts/discount_scraper.py
 scripts/scraped_discounts.json
+*.bundle
+.tmp*
+check_temp.py
+scripts/update_remote.py
+.env.deploy

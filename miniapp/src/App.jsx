@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   fetchPlaces, fetchFavorites, addFavorite, removeFavorite,
   saveProfile, fetchProfile,
 } from './api';
+import { notifyReady, haptic, hapticSelect, bindBackButton, isInsideMax } from './utils/maxBridge';
 
 import TopBar from './components/TopBar';
 import BottomNav from './components/BottomNav';
@@ -29,35 +30,18 @@ const parseInitDataUserId = (raw) => {
 };
 
 // MAX кладёт данные пользователя в window.WebApp.initData / initDataUnsafe.user.id —
-// это тот же id, что и в боте. Всё остальное — запасные варианты для браузера/отладки.
+// это тот же id, что и в боте. Доверять можно только id, подтверждённому подписью на сервере
+// (см. api.js), поэтому вне MAX используется анонимный guest_* id, а не id из URL или localStorage.
 const getUserId = () => {
   try {
     const webApp = window.WebApp;
-    const id =
-      webApp?.initDataUnsafe?.user?.id ||
-      parseInitDataUserId(webApp?.initData) ||
-      parseInitDataUserId(window.Telegram?.WebApp?.initData);
-    if (id) {
-      localStorage.setItem('sc_user_id', String(id));
-      return String(id);
-    }
+    const id = webApp?.initDataUnsafe?.user?.id || parseInitDataUserId(webApp?.initData);
+    if (id) return String(id);
 
-    const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
-    const fromUrl =
-      new URLSearchParams(window.location.search).get('user_id') ||
-      hashParams.get('user_id') ||
-      parseInitDataUserId(hashParams.get('WebAppData') || hashParams.get('tgWebAppData'));
-    if (fromUrl) {
-      localStorage.setItem('sc_user_id', fromUrl);
-      return fromUrl;
-    }
-
-    const saved = localStorage.getItem('sc_user_id');
-    if (saved) return saved;
-
-    // Открыто вне MAX (обычный браузер): локальный гостевой id, без синхронизации с ботом
+    const saved = localStorage.getItem('sc_guest_id');
+    if (saved && saved.startsWith('guest_')) return saved;
     const guest = 'guest_' + Math.random().toString(36).slice(2, 12);
-    localStorage.setItem('sc_user_id', guest);
+    localStorage.setItem('sc_guest_id', guest);
     return guest;
   } catch {}
   return 'guest_local';
@@ -81,6 +65,7 @@ export default function App() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [toasts, setToasts] = useState([]);
+  const syncErrorShown = useRef(false);
 
   const showToast = useCallback((message) => {
     const id = Date.now() + Math.random();
@@ -107,7 +92,15 @@ export default function App() {
   // и периодически, чтобы изменения из бота появлялись без перезапуска.
   const syncProfile = useCallback(async (uid) => {
     const p = await fetchProfile(uid);
-    if (p === undefined) return; // сеть/сервер недоступны — оставляем локальное состояние
+    if (p === undefined) {
+      // сеть/сервер/авторизация недоступны — оставляем локальное состояние, но говорим об этом (один раз)
+      if (!syncErrorShown.current) {
+        syncErrorShown.current = true;
+        showToast(isInsideMax() ? 'Нет связи с сервером. Данные могут быть неактуальны' : 'Нет связи с сервером');
+      }
+      return;
+    }
+    syncErrorShown.current = false;
     if (p?.city && p?.category) {
       setCity((c) => (c === p.city ? c : p.city));
       setCategory((c) => (c === p.category ? c : p.category));
@@ -120,12 +113,10 @@ export default function App() {
       localStorage.removeItem('sc_survey_done');
       setIsSurveyDone(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
-    try {
-      window.WebApp?.ready?.();
-    } catch {}
+    notifyReady();
     const activeUid = getUserId();
     if (activeUid !== userId) setUserId(activeUid);
     syncProfile(activeUid);
@@ -182,16 +173,28 @@ export default function App() {
         await addFavorite(activeUid, place.id);
       }
     } catch (e) {
-      console.warn('API ошибка, обновляю локально', e);
+      // Сервер не принял изменение — не показываем ложный успех, состояние не меняем
+      console.warn('Не удалось изменить избранное', e);
+      haptic('error');
+      showToast('Не удалось сохранить. Проверьте соединение и попробуйте ещё раз');
+      return;
     }
     if (isFav) {
       setFavorites((prev) => prev.filter((f) => f.id !== place.id));
-      showToast('Удаленно');
+      showToast('Удалено из избранного');
+      hapticSelect();
     } else {
       setFavorites((prev) => [...prev, place]);
       showToast('Добавлено в избранное');
+      haptic('success');
     }
   };
+
+  // Нативная кнопка «Назад» MAX закрывает карточку места (и прячется на главных экранах)
+  useEffect(() => {
+    if (!selectedPlace) return bindBackButton(null);
+    return bindBackButton(() => setSelectedPlace(null));
+  }, [selectedPlace]);
 
   const handleRemoveFavorite = (place) => handleToggleFavorite(place);
 
@@ -248,6 +251,7 @@ export default function App() {
             isFav={favorites.some((f) => f.id === selectedPlace.id)}
             onToggleFav={() => handleToggleFavorite(selectedPlace)}
             onBack={() => setSelectedPlace(null)}
+            showToast={showToast}
           />
         ) : (
           <>

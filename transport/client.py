@@ -1,10 +1,26 @@
 import logging
+import os
+import ssl
 from typing import Any, Dict, List, Optional
+import certifi
 import httpx
 
 import config
 
 logger = logging.getLogger("transport")
+
+
+def _build_ssl_context():
+    """certifi bundle + Russian Trusted Root CA (issuer of *.max.ru). Falls back to no verification only on request."""
+    if config.MAX_TLS_INSECURE:
+        logger.warning("MAX_TLS_INSECURE=true: TLS certificate verification is DISABLED (debug only)")
+        return False
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    if config.MAX_CA_BUNDLE and os.path.exists(config.MAX_CA_BUNDLE):
+        ctx.load_verify_locations(config.MAX_CA_BUNDLE)
+    else:
+        logger.warning(f"MAX CA bundle not found at {config.MAX_CA_BUNDLE}; MAX API calls may fail TLS verification")
+    return ctx
 
 
 class MaxBotTransport:
@@ -16,6 +32,7 @@ class MaxBotTransport:
     def __init__(self, token: str = config.MAX_BOT_TOKEN, api_url: str = config.MAX_API_URL):
         self.token = token
         self.api_url = api_url.rstrip("/")
+        self.ssl_context = _build_ssl_context()
         self.headers = {
             "Authorization": self.token,
             "Content-Type": "application/json",
@@ -24,7 +41,7 @@ class MaxBotTransport:
 
     async def _request(self, method: str, endpoint: str, payload: Optional[Dict[str, Any]] = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.api_url}{endpoint}"
-        async with httpx.AsyncClient(timeout=35.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=35.0, verify=self.ssl_context) as client:
             try:
                 response = await client.request(
                     method=method,
