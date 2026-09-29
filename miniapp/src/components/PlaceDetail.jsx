@@ -55,7 +55,13 @@ export default function PlaceDetail({
   const emoji = getEmoji(place);
 
   const handleShare = async () => {
-    const text = [place.title, place.promo_text, place.address].filter(Boolean).join('\n');
+    // Название — первой строкой один раз; остальные строки без повторов названия
+    const title = String(place.title || '').trim();
+    const rest = [place.promo_text, place.address]
+      .filter(Boolean)
+      .map((line) => String(line).trim())
+      .filter((line) => line && line.toLowerCase() !== title.toLowerCase());
+    const text = [title, ...rest].filter(Boolean).join('\n');
     const link = place.map_url && /^https?:\/\//.test(place.map_url) ? place.map_url : undefined;
 
     // 1. Нативный диалог MAX (отправить в чат MAX / системный share)
@@ -64,7 +70,8 @@ export default function PlaceDetail({
     // 2. Вне MAX: системный share браузера, иначе копирование в буфер
     if (navigator.share) {
       try {
-        await navigator.share({ title: place.title, text, url: link });
+        // title не передаём: название уже первая строка text, иначе системный диалог покажет его дважды
+        await navigator.share({ text, url: link });
         return;
       } catch {
         // пользователь закрыл диалог — переходим к копированию
