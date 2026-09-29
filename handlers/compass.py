@@ -36,17 +36,21 @@ def get_category_keyboard() -> List[List[Dict[str, str]]]:
     ]
 
 
-def get_main_menu_keyboard() -> List[List[Dict[str, str]]]:
+def get_main_menu_keyboard(user_id: Optional[str] = None) -> List[List[Dict[str, str]]]:
+    app_url = f"https://socialcompass.ru/?user_id={user_id}" if user_id else "https://socialcompass.ru"
     return [
+        [{"text": "📱 Открыть мини-приложение", "url": app_url}],
         [{"text": "📍 Список мест и акций", "callback_data": "view_places"}],
         [{"text": "⭐ Избранное", "callback_data": "view_favorites"}],
         [{"text": "⚙️ Настройки профиля", "callback_data": "view_settings"}],
     ]
 
 
-def get_settings_keyboard() -> List[List[Dict[str, str]]]:
+def get_settings_keyboard(user_id: Optional[str] = None) -> List[List[Dict[str, str]]]:
+    app_url = f"https://socialcompass.ru/?user_id={user_id}" if user_id else "https://socialcompass.ru"
     return [
-        [{"text": "✏️ Изменить данные", "callback_data": "edit_profile"}],
+        [{"text": "📱 Настроить в мини-приложении", "url": app_url}],
+        [{"text": "✏️ Изменить данные в боте", "callback_data": "edit_profile"}],
         [{"text": "🏠 В главное меню", "callback_data": "menu_main"}],
     ]
 
@@ -174,7 +178,8 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
     # 3. Main menu navigation
     if data == "menu_main":
         await ctx.set_state(SocialCompasSG.MAIN_MENU)
-        return "🏠 **Главное меню Социального Компаса:**", get_main_menu_keyboard()
+        city, category = await get_effective_user_profile(user_id, ctx)
+        return f"🏠 **Главное меню Социального Компаса** ({city}, {category}):", get_main_menu_keyboard(user_id)
 
     # 4. View Places List
     if data == "view_places":
@@ -267,7 +272,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
             f"• Категория: **{category}**\n\n"
             "Вы можете изменить данные в боте или в мини-приложении."
         )
-        return msg, get_settings_keyboard()
+        return msg, get_settings_keyboard(user_id)
 
     # 9. Edit Data (Re-run survey)
     if data == "edit_profile":

@@ -1,3 +1,4 @@
+import json
 import logging
 import aiomysql
 from typing import Any, Dict, List, Optional
@@ -170,13 +171,13 @@ async def get_db_pool() -> Optional[aiomysql.Pool]:
 # Database helper functions
 
 async def save_user_profile(user_id: str, city: str, category: str):
-    """Saves or updates user profile in MySQL. Each user_id has its own row."""
+    """Saves or updates user profile in MySQL. Keeps Bot and MiniApp fully synchronized."""
     pool = await get_db_pool()
     if not pool:
         return
     async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            # Upsert by real user_id
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            # 1. Upsert for direct user_id
             await cur.execute(
                 """
                 INSERT INTO user_profiles (user_id, city, category) VALUES (%s, %s, %s)
@@ -184,8 +185,10 @@ async def save_user_profile(user_id: str, city: str, category: str):
                 """,
                 (user_id, city, category, city, category),
             )
-            # Also mirror to miniapp_user_1 as fallback for anonymous MiniApp sessions
-            if user_id != "miniapp_user_1":
+
+            # 2. Bidirectional sync:
+            # A) If updated from Bot (real user_id), mirror to miniapp_user_1 so MiniApp sees it
+            if user_id != "miniapp_user_1" and user_id not in TEST_ACCOUNT_DEFAULTS:
                 await cur.execute(
                     """
                     INSERT INTO user_profiles (user_id, city, category) VALUES ('miniapp_user_1', %s, %s)
@@ -193,7 +196,28 @@ async def save_user_profile(user_id: str, city: str, category: str):
                     """,
                     (city, category, city, category),
                 )
-            # Sync FSM context in user_states for this specific user only
+            # B) If updated from MiniApp (anonymous miniapp_user_1), mirror to the latest active bot user
+            elif user_id == "miniapp_user_1":
+                await cur.execute(
+                    """
+                    SELECT user_id FROM user_profiles
+                    WHERE user_id NOT IN ('miniapp_user_1', '998877', '554433', '112233')
+                    ORDER BY updated_at DESC LIMIT 1;
+                    """
+                )
+                latest_user = await cur.fetchone()
+                if latest_user and latest_user.get("user_id"):
+                    latest_uid = latest_user["user_id"]
+                    await cur.execute(
+                        """
+                        UPDATE user_profiles
+                        SET city = %s, category = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = %s;
+                        """,
+                        (city, category, latest_uid),
+                    )
+
+            # 3. Sync MySQL user_states table
             await cur.execute(
                 """
                 UPDATE user_states
@@ -202,6 +226,25 @@ async def save_user_profile(user_id: str, city: str, category: str):
                 """,
                 (city, category, user_id),
             )
+
+    # 4. Also directly sync Redis FSM cache so the bot updates instantly without waiting
+    try:
+        from storage.redis_client import get_redis
+        redis_client = await get_redis()
+        if redis_client:
+            uids_to_sync = [user_id]
+            if user_id == "miniapp_user_1":
+                keys = await redis_client.keys("fsm:data:*")
+                for k in keys:
+                    uids_to_sync.append(k.replace("fsm:data:", ""))
+            for uid in set(uids_to_sync):
+                raw = await redis_client.get(f"fsm:data:{uid}")
+                data = json.loads(raw) if raw else {}
+                data["city"] = city
+                data["category"] = category
+                await redis_client.set(f"fsm:data:{uid}", json.dumps(data, ensure_ascii=False))
+    except Exception as e:
+        logger.debug(f"Redis FSM sync error: {e}")
 
 
 TEST_ACCOUNT_DEFAULTS = {
@@ -212,27 +255,65 @@ TEST_ACCOUNT_DEFAULTS = {
 
 
 async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
-    """Fetches user profile from MySQL by user_id. Returns test account defaults if specified."""
+    """
+    Fetches user profile from MySQL by user_id.
+    Synchronizes between bot user and MiniApp (miniapp_user_1) based on the latest update timestamp.
+    """
+    # 1. Fixed test accounts check
+    if user_id in TEST_ACCOUNT_DEFAULTS:
+        pool = await get_db_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cur:
+                    await cur.execute(
+                        "SELECT city, category FROM user_profiles WHERE user_id = %s;",
+                        (user_id,)
+                    )
+                    row = await cur.fetchone()
+                    if row:
+                        return row
+        return TEST_ACCOUNT_DEFAULTS[user_id]
+
     pool = await get_db_pool()
     if not pool:
-        return TEST_ACCOUNT_DEFAULTS.get(user_id, {"city": "Москва", "category": "Студенты"})
+        return {"city": "Москва", "category": "Студенты"}
+
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            # 1. Exact match by user_id
-            if user_id:
+            # 2. For real users: check both user_id and miniapp_user_1, taking whichever was updated most recently!
+            if user_id and user_id != "miniapp_user_1":
                 await cur.execute(
-                    "SELECT city, category FROM user_profiles WHERE user_id = %s;",
+                    """
+                    SELECT user_id, city, category, updated_at
+                    FROM user_profiles
+                    WHERE user_id IN (%s, 'miniapp_user_1')
+                    ORDER BY updated_at DESC LIMIT 1;
+                    """,
                     (user_id,)
+                )
+                row = await cur.fetchone()
+                if row:
+                    # If miniapp_user_1 was the newer one, update the user_id row to keep them in sync
+                    if row.get("user_id") == "miniapp_user_1":
+                        await cur.execute(
+                            """
+                            UPDATE user_profiles
+                            SET city = %s, category = %s, updated_at = CURRENT_TIMESTAMP
+                            WHERE user_id = %s;
+                            """,
+                            (row["city"], row["category"], user_id),
+                        )
+                    return {"city": row["city"], "category": row["category"]}
+
+            elif user_id == "miniapp_user_1":
+                await cur.execute(
+                    "SELECT city, category FROM user_profiles WHERE user_id = 'miniapp_user_1';"
                 )
                 row = await cur.fetchone()
                 if row:
                     return row
 
-            # 2. Return specific test account defaults if defined
-            if user_id in TEST_ACCOUNT_DEFAULTS:
-                return TEST_ACCOUNT_DEFAULTS[user_id]
-
-            # 3. Last resort default
+            # 3. Default fallback
             return {"city": "Москва", "category": "Студенты"}
 
 

@@ -18,14 +18,25 @@ import ProfileTab from './tabs/ProfileTab';
 
 const getUserId = () => {
   try {
-    const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (tgId) return String(tgId);
-    const maxId = window.MaxWebApp?.user?.id;
-    if (maxId) return String(maxId);
     const urlId = new URLSearchParams(window.location.search).get('user_id');
-    if (urlId) return urlId;
+    if (urlId) {
+      localStorage.setItem('sc_user_id', urlId);
+      return urlId;
+    }
+    const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (tgId) {
+      localStorage.setItem('sc_user_id', String(tgId));
+      return String(tgId);
+    }
+    const maxId = window.MaxWebApp?.user?.id;
+    if (maxId) {
+      localStorage.setItem('sc_user_id', String(maxId));
+      return String(maxId);
+    }
+    const saved = localStorage.getItem('sc_user_id');
+    if (saved) return saved;
   } catch {}
-  return localStorage.getItem('sc_user_id') || 'miniapp_user_1';
+  return 'miniapp_user_1';
 };
 
 const USER_ID = getUserId();
