@@ -16,23 +16,64 @@ import ChatTab from './tabs/ChatTab';
 import FavoritesTab from './tabs/FavoritesTab';
 import ProfileTab from './tabs/ProfileTab';
 
+const extractUserFromStr = (raw) => {
+  if (!raw) return null;
+  try {
+    const clean = raw.startsWith('#') || raw.startsWith('?') ? raw.substring(1) : raw;
+    const params = new URLSearchParams(clean);
+    const directId = params.get('user_id') || params.get('id');
+    if (directId) return directId;
+
+    const initDataStr = params.get('tgWebAppData') || params.get('initData') || params.get('maxWebAppData') || clean;
+    if (initDataStr && initDataStr.includes('user=')) {
+      const inner = new URLSearchParams(initDataStr);
+      const userRaw = inner.get('user');
+      if (userRaw) {
+        const parsed = JSON.parse(decodeURIComponent(userRaw));
+        if (parsed?.id) return String(parsed.id);
+      }
+    }
+  } catch {}
+  return null;
+};
+
 const getUserId = () => {
   try {
-    const urlId = new URLSearchParams(window.location.search).get('user_id');
-    if (urlId) {
-      localStorage.setItem('sc_user_id', urlId);
-      return urlId;
+    // 1. Check window.location.search and hash
+    const fromSearch = extractUserFromStr(window.location.search);
+    if (fromSearch) {
+      localStorage.setItem('sc_user_id', fromSearch);
+      return fromSearch;
     }
+    const fromHash = extractUserFromStr(window.location.hash);
+    if (fromHash) {
+      localStorage.setItem('sc_user_id', fromHash);
+      return fromHash;
+    }
+
+    // 2. Telegram / MAX WebApp SDK objects
     const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (tgId) {
       localStorage.setItem('sc_user_id', String(tgId));
       return String(tgId);
     }
-    const maxId = window.MaxWebApp?.user?.id;
+    const tgInitData = window.Telegram?.WebApp?.initData;
+    if (tgInitData) {
+      const parsedFromInit = extractUserFromStr(tgInitData);
+      if (parsedFromInit) {
+        localStorage.setItem('sc_user_id', parsedFromInit);
+        return parsedFromInit;
+      }
+    }
+
+    // 3. MAX Messenger globals
+    const maxId = window.MaxWebApp?.user?.id || window.Max?.user?.id || window.MAX?.user?.id;
     if (maxId) {
       localStorage.setItem('sc_user_id', String(maxId));
       return String(maxId);
     }
+
+    // 4. Saved in localStorage
     const saved = localStorage.getItem('sc_user_id');
     if (saved) return saved;
   } catch {}
