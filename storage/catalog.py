@@ -101,8 +101,40 @@ NOMINATIM = "https://nominatim.openstreetmap.org/search"
 HEADERS = {"User-Agent": "SocialCompass-hackathon/1.0 (catalog geocoder)"}
 
 
+_STREET_WORD = r"(?:ул|пр|наб|пер|ш|бул|пл)\."
+
+
 def split_addresses(address: Optional[str]) -> List[str]:
-    return [a.strip() for a in re.split(r"[;\n]+", address or "") if a.strip()]
+    """Addresses are separated by ';' or newline; "Х ул. и Y ул." (two streets) is split as well."""
+    out: List[str] = []
+    for part in re.split(r"[;\n]+", address or ""):
+        part = part.strip()
+        if not part:
+            continue
+        if len(re.findall(_STREET_WORD, part)) >= 2:
+            out.extend(x.strip() for x in re.split(r"\s+и\s+(?=[А-ЯЁ])", part) if x.strip())
+        else:
+            out.append(part)
+    return out
+
+
+_ABBREVIATIONS = [
+    (r"\bпр-кт\b\.?|\bпр-т\b\.?|\bпр\.", "проспект"),
+    (r"\bул\.", "улица"),
+    (r"\bнаб\.", "набережная"),
+    (r"\bпер\.", "переулок"),
+    (r"\bбул\.", "бульвар"),
+    (r"\bпл\.", "площадь"),
+    (r"\bш\.", "шоссе"),
+    (r"\bмкр\.?", "микрорайон"),
+]
+
+
+def expand_abbreviations(text: str) -> str:
+    """'Приморский пр., 72' -> 'Приморский проспект, 72' (the geocoder does not understand 'пр.')."""
+    for pattern, full in _ABBREVIATIONS:
+        text = re.sub(pattern, full, text, flags=re.I)
+    return text
 
 
 def query_variants(city: str, address: str) -> List[str]:
@@ -115,13 +147,16 @@ def query_variants(city: str, address: str) -> List[str]:
     a = re.sub(r"(\d+)\s*[кc]\.?\s*\d+.*$", r"\1", a, flags=re.I)  # 2к1 / 1с99 -> 2 / 1
     a = re.sub(r",\s*(стр|с|к|корп)\.?\s*\d+.*$", "", a, flags=re.I)  # ", с.7" / ", стр. 5"
     a = re.sub(r"\s+", " ", a).strip(" ,")
+    a = re.sub(rf"^{re.escape(city)}\s*,\s*", "", a, flags=re.I)   # "Новосибирск , Державина, 1"
     street_num = re.match(r"^(.*?\d+[а-яa-z]?)(?![\d/])", a, flags=re.I)
     street_only = re.sub(r"[,\s]*\d.*$", "", a).strip(" ,")
-    cands = [f"{address}, {city}", f"{a}, {city}"]
+    cands = [f"{address}, {city}", f"{a}, {city}", f"{expand_abbreviations(a)}, {city}"]
     if street_num:
         cands.append(f"{street_num.group(1)}, {city}")
+        cands.append(f"{expand_abbreviations(street_num.group(1))}, {city}")
     if street_only and re.search(r"(ул|пр|наб|пер|ш|бул|пл|аллея|линия)\b", street_only, flags=re.I):
         cands.append(f"{street_only}, {city}")
+        cands.append(f"{expand_abbreviations(street_only)}, {city}")
     seen, res = set(), []
     for q in cands:
         if q not in seen:
@@ -133,7 +168,7 @@ def query_variants(city: str, address: str) -> List[str]:
 async def geocode_address(client: httpx.AsyncClient, city: str, address: str) -> Optional[Tuple[float, float]]:
     box = CITY_BOX.get(city)
     for q in query_variants(city, address):
-        params: Dict[str, Any] = {"q": q, "format": "json", "limit": 1, "countrycodes": "ru"}
+        params: Dict[str, Any] = {"q": q, "format": "json", "limit": 1, "countrycodes": "ru", "addressdetails": 1}
         if box:
             params.update(viewbox=",".join(map(str, box)), bounded=1)
         data: list = []
@@ -143,9 +178,19 @@ async def geocode_address(client: httpx.AsyncClient, city: str, address: str) ->
         except Exception as exc:
             logger.warning(f"Geocoder request failed: {exc}")
         await asyncio.sleep(1.1)  # Nominatim usage policy
-        if data:
+        if data and _same_house(q, data[0]):
             return float(data[0]["lat"]), float(data[0]["lon"])
     return None
+
+
+def _same_house(query: str, hit: Dict[str, Any]) -> bool:
+    """Reject a hit whose house number differs from the requested one ('Державина, 1' -> house '92/1')."""
+    asked = re.search(r"(?<![\w/])(\d+)", query.rsplit(",", 1)[0])
+    got = (hit.get("address") or {}).get("house_number")
+    if not asked or not got:
+        return True
+    lead = re.match(r"\d+", str(got))
+    return bool(lead) and lead.group(0) == asked.group(1)
 
 
 async def geocode_missing_places(pool: aiomysql.Pool, force: bool = False, retry_empty: bool = False) -> Dict[str, int]:
