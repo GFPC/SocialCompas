@@ -82,7 +82,8 @@ def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str = "", la
 
 async def get_effective_user_profile(user_id: Optional[str], ctx: FSMContext) -> Tuple[str, str]:
     """
-    Получает самый свежий профиль (город и категорию) из БД или FSM с немедленной синхронизацией.
+    Получает актуальный профиль (город и категорию) из БД по user_id.
+    Всегда синхронизирует FSM-контекст бота с данными из БД.
     """
     profile = await get_user_profile(user_id) if user_id else None
     fsm_data = await ctx.get_data()
@@ -94,7 +95,12 @@ async def get_effective_user_profile(user_id: Optional[str], ctx: FSMContext) ->
         city = fsm_data.get("city", "Москва")
         category = fsm_data.get("category", "Студенты")
 
+    # Sync FSM context if it's out of date with the DB
     if fsm_data.get("city") != city or fsm_data.get("category") != category:
+        logger.info(
+            f"[sync] user={user_id}: FSM({fsm_data.get('city')}/{fsm_data.get('category')}) "
+            f"→ DB({city}/{category}) — обновляем FSM"
+        )
         await ctx.update_data(city=city, category=category)
 
     return city, category
