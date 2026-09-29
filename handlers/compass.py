@@ -18,6 +18,11 @@ from storage.db import (
 logger = logging.getLogger("handlers.compass")
 
 
+MINIAPP_HINT = (
+    "📱 **Мини-приложение** с картой, избранным и ИИ-помощником открывается кнопкой "
+    "приложения рядом с полем ввода сообщения (а не кнопками под сообщением)."
+)
+
 # --- Keyboard Helpers ---
 
 def get_city_keyboard() -> List[List[Dict[str, str]]]:
@@ -120,13 +125,14 @@ async def handle_message_event(event: BaseEvent, ctx: FSMContext, current_state:
         if cmd == "/menu":
             city, category = await get_effective_user_profile(user_id, ctx)
             await ctx.set_state(SocialCompasSG.MAIN_MENU)
-            return f"🏠 **Главное меню Социального Компаса** ({city}, {category}):", get_main_menu_keyboard(user_id)
+            return f"🏠 **Главное меню Социального Компаса** ({city}, {category}):\n\n{MINIAPP_HINT}", get_main_menu_keyboard(user_id)
 
         if cmd == "/start" or not current_state:
             await ctx.set_state(SocialCompasSG.SELECT_CITY)
             msg = (
                 "👋 **Добро пожаловать в чат-бот «Социальный компас».**\n\n"
                 "Для того, чтобы я мог помочь вам найти подходящие места и акции, пройдите небольшой опрос.\n\n"
+                f"{MINIAPP_HINT}\n\n"
                 "**Выберите ваш город:**"
             )
             return msg, get_city_keyboard()
@@ -173,7 +179,8 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
 
         msg = (
             "**Благодарю за ответы!** Вы сможете изменить их позже в настройках.\n"
-            "Интересные места и акции уже ждут вас."
+            "Интересные места и акции уже ждут вас.\n\n"
+            f"{MINIAPP_HINT}"
         )
         return msg, get_main_menu_keyboard(user_id)
 
@@ -181,7 +188,7 @@ async def handle_callback_event(event: CallbackEvent, ctx: FSMContext, current_s
     if data == "menu_main":
         await ctx.set_state(SocialCompasSG.MAIN_MENU)
         city, category = await get_effective_user_profile(user_id, ctx)
-        return f"🏠 **Главное меню Социального Компаса** ({city}, {category}):", get_main_menu_keyboard(user_id)
+        return f"🏠 **Главное меню Социального Компаса** ({city}, {category}):\n\n{MINIAPP_HINT}", get_main_menu_keyboard(user_id)
 
     # 4. View Places List
     if data == "view_places":
