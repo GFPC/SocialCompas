@@ -1,8 +1,55 @@
+# ──────────────────────────────────────────────────────
+#  SocialCompas — Local Development Stack
+#  Запуск: docker compose up -d --build
+#  MiniApp: http://localhost:8000
+#  API:     http://localhost:8000/api/v1/
+# ──────────────────────────────────────────────────────
+
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: socialcompas_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MAX_BOT_TOKEN=${MAX_BOT_TOKEN:-YOUR_MAX_BOT_TOKEN_HERE}
+      - MAX_API_URL=https://platform-api2.max.ru
+      - SIMULATION_MODE=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=bot_user
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-bot_password}
+      - MYSQL_DB=socialcompas_db
+      - AITUNNEL_API_KEY=${AITUNNEL_API_KEY:-YOUR_AITUNNEL_API_KEY_HERE}
+      - AITUNNEL_BASE_URL=https://api.aitunnel.ru/v1
+      - AI_MODEL=gpt-4o-mini
+      - CHAT_RATE_LIMIT_PER_MINUTE=10
+      - ENABLE_DOCS=true   # Docs enabled for local dev / jury review
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/cities"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   mysql:
     image: mysql:8.0
     container_name: socialcompas_mysql
-    restart: always
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: socialcompas_db
@@ -16,12 +63,14 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks:
+      - app_net
 
   redis:
     image: redis:7-alpine
     container_name: socialcompas_redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -31,7 +80,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app_net
 
 volumes:
   mysql_data:
   redis_data:
+
+networks:
+  app_net:
+    driver: bridge
