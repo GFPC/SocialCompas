@@ -65,16 +65,16 @@ def get_place_detail_keyboard(place_id: int, is_fav: bool, map_url: str = "", la
     fav_btn_text = "❌ Удалить из избранного" if is_fav else "⭐ Добавить в избранное"
     fav_cb = f"rem_fav_{place_id}" if is_fav else f"add_fav_{place_id}"
 
-    if lat and lng:
-        target_map_url = f"https://yandex.ru/maps/?pt={lng},{lat}&z=16&l=map"
-    elif map_url and "http" in map_url:
-        target_map_url = map_url
+    if map_url and "http" in map_url:
+        target_url = map_url
+    elif lat and lng:
+        target_url = f"https://yandex.ru/maps/?pt={lng},{lat}&z=16&l=map"
     else:
-        target_map_url = "https://socialcompass.ru"
+        target_url = "https://socialcompass.ru"
 
     return [
         [{"text": fav_btn_text, "callback_data": fav_cb}],
-        [{"text": "🗺 Показать на карте (Яндекс Карты)", "url": target_map_url}],
+        [{"text": "🌐 Перейти на сайт", "url": target_url}],
         [{"text": "🔙 К списку мест", "callback_data": "view_places"}],
         [{"text": "🏠 Вернуться на главную", "callback_data": "menu_main"}],
     ]
