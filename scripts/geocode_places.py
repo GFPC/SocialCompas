@@ -33,15 +33,24 @@ def split_addresses(address: str):
 
 
 def variants(city: str, address: str):
-    """Progressively simpler queries: full, without office/building tail, street + house only."""
-    clean = re.sub(r"\b(оф|пом|кв|эт|ком)\.?\s*[\w\-/]+", "", address, flags=re.I)
-    clean = re.sub(r"\s+", " ", clean).strip(" ,")
-    parts = [p.strip() for p in clean.split(",") if p.strip()]
-    out = [f"{address}, {city}", f"{clean}, {city}"]
-    if len(parts) > 2:
-        out.append(f"{', '.join(parts[:2])}, {city}")
+    """Progressively simpler queries: full, normalized, street + house number, street only."""
+    a = re.sub(r"\(.*?\)", "", address)                      # (цокольный этаж), (ТРК ...)
+    a = a.split(" - ")[-1]                                     # "Большой зал - Невский пр., 30"
+    a = re.sub(r"\b(оф|пом|кв|эт|ком)\.?\s*[\w\-/]+", "", a, flags=re.I)
+    a = re.sub(r"\b(ТРК|ТРЦ|ТЦ)\b.*?,", "", a, flags=re.I)
+    a = re.sub(r"\bд(ом)?\.?\s*(?=\d)", "", a, flags=re.I)     # д.5 -> 5
+    a = re.sub(r"(\d+)\s*[кc]\.?\s*\d+.*$", r"\1", a, flags=re.I)  # 2к1 / 1с99 -> 2 / 1
+    a = re.sub(r",\s*(стр|с|к|корп)\.?\s*\d+.*$", "", a, flags=re.I)  # ", с.7" / ", стр. 5"
+    a = re.sub(r"\s+", " ", a).strip(" ,")
+    street_num = re.match(r"^(.*?\d+[а-яa-z]?)(?![\d/])", a, flags=re.I)
+    street_only = re.sub(r"[,\s]*\d.*$", "", a).strip(" ,")
+    cands = [f"{address}, {city}", f"{a}, {city}"]
+    if street_num:
+        cands.append(f"{street_num.group(1)}, {city}")
+    if street_only and re.search(r"(ул|пр|наб|пер|ш|бул|пл|аллея|линия)\b", street_only, flags=re.I):
+        cands.append(f"{street_only}, {city}")
     seen, res = set(), []
-    for q in out:
+    for q in cands:
         if q not in seen:
             seen.add(q)
             res.append(q)
@@ -82,7 +91,7 @@ async def main(force: bool):
     ok = fail = 0
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
         for row in rows:
-            if row["points"] and not force:
+            if row["points"] not in (None, "", "[]") and not force:
                 continue
             addrs = split_addresses(row["address"])
             points = []
