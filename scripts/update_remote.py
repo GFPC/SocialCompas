@@ -11,37 +11,71 @@ SERVER_USER = os.getenv("SERVER_USER", "root")
 SERVER_PASS = os.getenv("SERVER_PASS", r"***REMOVED***")
 PROJECT_DIR = "/home/SocialCompas"
 
+
+def exec_cmd(client, title, cmd, ignore_errors=False):
+    print(f"\n--- {title} ---")
+    stdin, stdout, stderr = client.exec_command(cmd, timeout=120)
+    out = stdout.read().decode('utf-8', errors='ignore').strip()
+    err = stderr.read().decode('utf-8', errors='ignore').strip()
+    if out:
+        print(out)
+    if err:
+        print(f"[STDERR] {err}")
+    exit_code = stdout.channel.recv_exit_status()
+    if exit_code != 0 and not ignore_errors:
+        print(f"[WARN] Command exited with code {exit_code}")
+    return exit_code
+
+
 def run():
     print(f"🚀 Подключение к SSH {SERVER_HOST}...")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(SERVER_HOST, username=SERVER_USER, password=SERVER_PASS, timeout=20)
-    
-    commands = [
-        ("Git Pull", f"cd {PROJECT_DIR} && git fetch origin && git reset --hard origin/main"),
-        ("Build MiniApp Frontend", f"cd {PROJECT_DIR}/miniapp && npm install && npm run build"),
-        ("Copy & Reload Nginx Config", f"cp {PROJECT_DIR}/scripts/nginx_socialcompass.conf /etc/nginx/sites-available/socialcompass && ln -sf /etc/nginx/sites-available/socialcompass /etc/nginx/sites-enabled/socialcompass && nginx -t && systemctl reload nginx"),
-        ("Docker compose build & up", f"cd {PROJECT_DIR} && docker compose -f docker-compose.prod.yml up -d --build --remove-orphans && sleep 3"),
-        ("Alembic Upgrade", f"docker exec socialcompas_app alembic upgrade head"),
-        ("Import Excel Data", f"docker exec socialcompas_app python scripts/import_excel.py"),
-    ]
 
-    for title, cmd in commands:
-        print(f"\n--- {title} ---")
-        stdin, stdout, stderr = client.exec_command(cmd)
-        out = stdout.read().decode('utf-8', errors='ignore')
-        err = stderr.read().decode('utf-8', errors='ignore')
-        if out:
-            print(out.strip())
-        if err:
-            print(f"[STDERR] {err.strip()}")
+    # 1. Git pull
+    exec_cmd(client, "Git Pull",
+             f"cd {PROJECT_DIR} && git fetch origin && git reset --hard origin/main")
 
-    print("\n--- SSH Key for GitHub Secrets ---")
-    stdin, stdout, stderr = client.exec_command("cat /root/.ssh/github_actions")
-    key = stdout.read().decode('utf-8', errors='ignore').strip()
-    print(key)
+    # 2. Build MiniApp frontend
+    exec_cmd(client, "Build MiniApp Frontend",
+             f"cd {PROJECT_DIR}/miniapp && npm install && npm run build")
 
+    # 3. Reload Nginx
+    exec_cmd(client, "Copy & Reload Nginx Config",
+             f"cp {PROJECT_DIR}/scripts/nginx_socialcompass.conf /etc/nginx/sites-available/socialcompass"
+             f" && ln -sf /etc/nginx/sites-available/socialcompass /etc/nginx/sites-enabled/socialcompass"
+             f" && nginx -t && systemctl reload nginx")
+
+    # 4. Stop + remove stale containers cleanly to avoid name conflicts
+    exec_cmd(client, "Docker Compose Down (clean stop)",
+             f"cd {PROJECT_DIR} && docker compose -f docker-compose.prod.yml down --remove-orphans",
+             ignore_errors=True)
+
+    # 5. Force-remove any zombie container with conflicting name
+    exec_cmd(client, "Remove stale socialcompas_app container (if any)",
+             "docker rm -f socialcompas_app 2>/dev/null || true",
+             ignore_errors=True)
+
+    # 6. Build & start fresh
+    exec_cmd(client, "Docker Compose Build & Up",
+             f"cd {PROJECT_DIR} && docker compose -f docker-compose.prod.yml up -d --build")
+
+    # 7. Wait for app to be healthy
+    exec_cmd(client, "Waiting for app to be healthy",
+             "sleep 8 && docker ps --filter name=socialcompas_app --format '{{.Names}} {{.Status}}'")
+
+    # 8. Alembic migrations
+    exec_cmd(client, "Alembic Upgrade",
+             "docker exec socialcompas_app alembic upgrade head")
+
+    # 9. Import Excel data
+    exec_cmd(client, "Import Excel Data",
+             "docker exec socialcompas_app python scripts/import_excel.py")
+
+    print("\n✅ Деплой завершён успешно!")
     client.close()
+
 
 if __name__ == "__main__":
     run()
