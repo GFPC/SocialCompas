@@ -48,6 +48,31 @@ function isMapUrl(url) {
   );
 }
 
+// Копирование в буфер: современный API, а если webview его не даёт — через скрытое textarea
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // переходим к запасному способу
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function PlaceDetail({
   place, isFav, onToggleFav, onBack, showToast,
 }) {
@@ -64,23 +89,24 @@ export default function PlaceDetail({
     const text = [title, ...rest].filter(Boolean).join('\n');
     const link = place.map_url && /^https?:\/\//.test(place.map_url) ? place.map_url : undefined;
 
-    // 1. Нативный диалог MAX (отправить в чат MAX / системный share)
-    if (shareViaMax({ text, link })) return;
-
-    // 2. Вне MAX: системный share браузера, иначе копирование в буфер
-    if (navigator.share) {
+    // 1. Нативный диалог MAX (или системный share вне моста) — сразу, пока действует жест пользователя.
+    //    Исход не гарантирован (в части клиентов MAX вызов ничего не показывает), поэтому п. 2 выполняется всегда.
+    let dialogRequested = shareViaMax({ text, link });
+    if (!dialogRequested && navigator.share) {
       try {
         // title не передаём: название уже первая строка text, иначе системный диалог покажет его дважды
         await navigator.share({ text, url: link });
-        return;
+        dialogRequested = true;
       } catch {
-        // пользователь закрыл диалог — переходим к копированию
+        // пользователь закрыл диалог или share недоступен — остаётся копирование
       }
     }
-    try {
-      await navigator.clipboard.writeText(link ? `${text}\n${link}` : text);
-      showToast?.('Скопировано в буфер');
-    } catch {
+
+    // 2. Копирование в буфер с видимой обратной связью — работает везде
+    const copied = await copyToClipboard(link ? `${text}\n${link}` : text);
+    if (copied) {
+      showToast?.('Скопировано в буфер обмена');
+    } else if (!dialogRequested) {
       showToast?.('Не удалось поделиться');
     }
   };

@@ -157,7 +157,11 @@ export default function App() {
     try {
       const activeUid = userId || getUserId();
       const data = await fetchFavorites(activeUid);
-      setFavorites(data.items || []);
+      const next = data.items || [];
+      // Периодическая синхронизация: не перерисовываем приложение, если избранное не изменилось
+      setFavorites((prev) =>
+        prev.length === next.length && prev.every((p, i) => p.id === next[i].id) ? prev : next
+      );
     } catch (e) {
       console.error(e);
     }

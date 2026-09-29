@@ -51,20 +51,24 @@ export function bindBackButton(handler) {
   };
 }
 
-/** Делится текстом через диалог MAX (в чат MAX / нативный share). Возвращает true, если мост обработал вызов. */
+/**
+ * Вызывает нативный диалог «Поделиться» MAX (в чат MAX / системный). Возвращает true, если вызов сделан
+ * (метод моста есть). Асинхронные отказы моста логируются и не роняют приложение.
+ */
 export function shareViaMax({ text, link }) {
   const b = bridge();
+  const method = b?.shareMaxContent ? 'shareMaxContent' : b?.shareContent ? 'shareContent' : null;
+  if (!method) return false;
   try {
-    if (b?.shareMaxContent) {
-      b.shareMaxContent({ text, link });
-      return true;
+    const result = b[method]({ text, link });
+    if (result && typeof result.catch === 'function') {
+      result.catch((err) => console.warn(`[MAX bridge] ${method} failed`, err));
     }
-    if (b?.shareContent) {
-      b.shareContent({ text, link });
-      return true;
-    }
-  } catch {}
-  return false;
+    return true;
+  } catch (err) {
+    console.warn(`[MAX bridge] ${method} threw`, err);
+    return false;
+  }
 }
 
 /** Открывает внешнюю ссылку средствами MAX, если возможно. */

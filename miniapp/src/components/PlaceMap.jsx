@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const CITY_CENTERS = {
   'Москва': [55.7558, 37.6173],
@@ -121,12 +121,16 @@ function presetFor(type) {
   return 'islands#blueIcon';
 }
 
+// Константа, а не `places = []` в параметрах: литерал создаёт новый массив при каждом рендере,
+// и эффект карты пересоздавал её (мерцание) при любом обновлении родителя.
+const NO_PLACES = [];
+
 export default function PlaceMap({
   lat,
   lng,
   address,
   title,
-  places = [],
+  places = NO_PLACES,
   points: detailPoints,
   city = 'Москва',
   onSelectPlace,
@@ -136,6 +140,17 @@ export default function PlaceMap({
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Карта пересоздаётся только при реальном изменении данных, а не при смене идентичности массивов/объектов
+  // (родитель перерисовывается каждые ~20 с из-за синхронизации избранного и профиля).
+  const dataKey = useMemo(
+    () =>
+      JSON.stringify([
+        places.map((p) => [p.id, p.address, p.lat, p.lng, p.points]),
+        detailPoints ?? null,
+      ]),
+    [places, detailPoints]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -249,7 +264,8 @@ export default function PlaceMap({
       destroyMap();
       setMapLoaded(false);
     };
-  }, [lat, lng, address, title, places, detailPoints, city, zoom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lng, address, title, dataKey, city, zoom]);
 
   return (
     <div style={{ marginTop: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-color, #E5E7EB)', position: 'relative' }}>
