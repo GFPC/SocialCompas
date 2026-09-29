@@ -204,11 +204,18 @@ async def save_user_profile(user_id: str, city: str, category: str):
             )
 
 
+TEST_ACCOUNT_DEFAULTS = {
+    "998877": {"city": "Москва", "category": "Студенты"},
+    "554433": {"city": "Санкт-Петербург", "category": "Пенсионеры"},
+    "112233": {"city": "Новосибирск", "category": "Участники СВО"},
+}
+
+
 async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
-    """Fetches user profile from MySQL by user_id. Falls back to miniapp_user_1 for anonymous sessions."""
+    """Fetches user profile from MySQL by user_id. Returns test account defaults if specified."""
     pool = await get_db_pool()
     if not pool:
-        return None
+        return TEST_ACCOUNT_DEFAULTS.get(user_id, {"city": "Москва", "category": "Студенты"})
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             # 1. Exact match by user_id
@@ -221,14 +228,9 @@ async def get_user_profile(user_id: str) -> Optional[Dict[str, str]]:
                 if row:
                     return row
 
-            # 2. Fallback: miniapp_user_1 (covers anonymous MiniApp profile updates)
-            if user_id != "miniapp_user_1":
-                await cur.execute(
-                    "SELECT city, category FROM user_profiles WHERE user_id = 'miniapp_user_1';"
-                )
-                row = await cur.fetchone()
-                if row:
-                    return row
+            # 2. Return specific test account defaults if defined
+            if user_id in TEST_ACCOUNT_DEFAULTS:
+                return TEST_ACCOUNT_DEFAULTS[user_id]
 
             # 3. Last resort default
             return {"city": "Москва", "category": "Студенты"}
